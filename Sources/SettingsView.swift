@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var extractionResult: String?
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var showHelpAlert = false
 
     let onSave: (ClaudeSettings) -> Void
 
@@ -35,9 +36,26 @@ struct SettingsView: View {
                 .padding()
             } else {
                 VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Text("Credentials")
+                            .font(.headline)
+
+                        Button(action: {
+                            showHelpAlert = true
+                        }) {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundColor(.blue)
+                        }
+                        .buttonStyle(.plain)
+                        .help("How to get credentials manually")
+
+                        Spacer()
+                    }
+
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Organization ID")
-                            .font(.headline)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
 
                         TextField("6e35a193-deaa-46a0-80bd-f7a1652d383f", text: $organizationId)
                             .textFieldStyle(.roundedBorder)
@@ -46,7 +64,8 @@ struct SettingsView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Session Key")
-                            .font(.headline)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
 
                         SecureField("sk-ant-sid01-...", text: $sessionKey)
                             .textFieldStyle(.roundedBorder)
@@ -98,6 +117,28 @@ struct SettingsView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(errorMessage)
+        }
+        .alert("How to Get Credentials Manually", isPresented: $showHelpAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("""
+            For Chrome/Brave browsers:
+
+            1. Open https://claude.ai in your browser
+            2. Make sure you're logged in
+            3. Press F12 to open Developer Tools
+            4. Click on the "Application" tab
+            5. In the left sidebar, expand "Cookies"
+            6. Click on "https://claude.ai"
+
+            7. Find and copy these two cookies:
+               • sessionKey: Copy the entire value
+               • lastActiveOrg: This is your Organization ID
+
+            8. Paste them into the fields above
+
+            Note: sessionKey usually starts with "sk-ant-sid01-"
+            """)
         }
     }
 
