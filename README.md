@@ -70,6 +70,7 @@ swift build -c release
 ### Automatic (Default)
 
 ClaudeMeter checks for an active session in:
+
 - Claude Desktop cookies
 - Brave Browser cookies
 - Chrome cookies
@@ -79,12 +80,14 @@ If found, monitoring starts automatically.
 ### Manual Setup
 
 If no session is detected:
+
 1. Click the menu bar icon
 2. Open "Settings"
 3. Click "Auto-Detect" again or enter credentials manually
 
 To manually retrieve session details:
-1. Visit https://claude.ai/settings/usage while logged in
+
+1. Visit <https://claude.ai/settings/usage> while logged in
 2. Open Developer Tools → Network
 3. Refresh, inspect the usage request
 4. Copy:
@@ -93,7 +96,7 @@ To manually retrieve session details:
 
 ## Usage
 
-### Dropdown Menu Includes:
+### Dropdown Menu Includes
 
 - Current usage + reset timer
 - Refresh (Cmd+R)
@@ -136,6 +139,7 @@ swift build -c release
 ```
 
 Key files:
+
 - `CredentialExtractor.swift`
 - `MenuBarManager.swift`
 - `SettingsView.swift`
