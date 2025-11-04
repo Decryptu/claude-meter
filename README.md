@@ -32,17 +32,20 @@ That's it! The app will auto-detect your credentials and start monitoring.
 ## Installation Options
 
 **Option 1: Quick Run**
+
 ```bash
 ./run.sh
 ```
 
 **Option 2: Manual Build**
+
 ```bash
 swift build -c release
 ./.build/release/ClaudeMeter
 ```
 
 **Option 3: Install to Applications**
+
 ```bash
 ./Scripts/install.sh
 ```
@@ -52,6 +55,7 @@ swift build -c release
 ### Automatic (Default)
 
 On first run, ClaudeMeter searches for credentials in:
+
 - Claude Desktop cookies
 - Brave Browser cookies
 - Chrome cookies
@@ -61,12 +65,14 @@ If found, you'll see a notification and the app starts working immediately.
 ### Manual Setup
 
 If auto-detection fails:
+
 1. Click the menu bar icon
 2. Select "Configure Settings..."
 3. Click "Auto-Detect" or enter credentials manually
 
 To find credentials manually:
-1. Go to https://claude.ai/settings/usage
+
+1. Go to <https://claude.ai/settings/usage>
 2. Open Developer Tools (Cmd+Option+I) → Network tab
 3. Refresh and find the `usage` request
 4. Copy Organization ID from URL and Session Key from Cookie header
@@ -74,10 +80,12 @@ To find credentials manually:
 ## Usage
 
 **Menu Bar Icon:**
+
 - Ring fills clockwise based on usage %
 - Color changes: green (0-49%) → yellow (50-79%) → red (80-100%)
 
 **Dropdown Menu:**
+
 - Current usage and time until reset
 - Refresh Now (Cmd+R)
 - Launch at Login toggle
@@ -98,6 +106,7 @@ To find credentials manually:
 ## Building for Distribution
 
 **Create .app bundle:**
+
 ```bash
 ./Scripts/build-app.sh 1.0.0
 ```
@@ -105,6 +114,7 @@ To find credentials manually:
 This creates an unsigned .app bundle in `dist/` ready for distribution.
 
 **Prepare GitHub release:**
+
 ```bash
 ./Scripts/prepare-release.sh 1.0.0
 ```
@@ -114,12 +124,14 @@ This builds the app and creates a release package with checksums and notes.
 ## Development
 
 **Build for testing:**
+
 ```bash
 swift build          # Debug
 swift build -c release  # Release
 ```
 
 **Key Files:**
+
 - `Sources/CredentialExtractor.swift` - Auto-detection
 - `Sources/MenuBarManager.swift` - Menu bar logic
 - `Sources/SettingsView.swift` - SwiftUI settings
