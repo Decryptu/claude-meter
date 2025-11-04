@@ -19,6 +19,11 @@ xcuserdata/
 *.dSYM.zip
 *.dSYM
 
+# Distribution folder
+dist/
+*.zip
+*.dmg
+
 # Configuration files (contains sensitive data)
 settings.json
 .config/
