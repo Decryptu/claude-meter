@@ -1,5 +1,7 @@
 import Foundation
 import SQLite3
+import Security
+import CryptoKit
 
 class CredentialExtractor {
     private let logger = Logger.shared
@@ -136,11 +138,13 @@ class CredentialExtractor {
         let tempPath = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 
         do {
+            logger.log("Copying database for \(source)", level: .debug)
             try FileManager.default.copyItem(at: path, to: tempPath)
             defer { try? FileManager.default.removeItem(at: tempPath) }
 
             var db: OpaquePointer?
 
+            logger.log("Opening database for \(source)", level: .debug)
             guard sqlite3_open(tempPath.path, &db) == SQLITE_OK else {
                 logger.log("Failed to open database: \(String(cString: sqlite3_errmsg(db)))", level: .error)
                 sqlite3_close(db)
@@ -148,12 +152,18 @@ class CredentialExtractor {
             }
 
             defer { sqlite3_close(db) }
+            logger.log("Database opened successfully for \(source)", level: .debug)
+
+            // Debug: List all claude.ai cookies to understand the schema
+            listAllClaudeCookies(db: db, source: source)
 
             // Extract sessionKey
-            let sessionKey = extractCookie(db: db, name: "sessionKey", domain: ".claude.ai")
+            logger.log("Extracting sessionKey from \(source)", level: .debug)
+            let sessionKey = extractCookie(db: db, name: "sessionKey", domain: ".claude.ai", source: source)
 
             // Extract organization ID from lastActiveOrg
-            let orgId = extractCookie(db: db, name: "lastActiveOrg", domain: ".claude.ai")
+            logger.log("Extracting lastActiveOrg from \(source)", level: .debug)
+            let orgId = extractCookie(db: db, name: "lastActiveOrg", domain: ".claude.ai", source: source)
 
             if let sessionKey = sessionKey {
                 logger.log("Found sessionKey in \(source)", level: .info)
@@ -173,18 +183,53 @@ class CredentialExtractor {
             }
 
         } catch {
-            logger.log("Error copying database: \(error.localizedDescription)", level: .error)
+            logger.log("Error accessing database for \(source): \(error.localizedDescription)", level: .error)
         }
 
+        logger.log("Returning nil from extractFromCookieDatabase for \(source)", level: .debug)
         return nil
     }
 
-    private func extractCookie(db: OpaquePointer?, name: String, domain: String) -> String? {
+    private func listAllClaudeCookies(db: OpaquePointer?, source: String) {
+        let query = """
+        SELECT name, host_key, length(value) as value_len, length(encrypted_value) as enc_len
+        FROM cookies
+        WHERE host_key LIKE '%claude.ai%'
+        LIMIT 20
+        """
+
+        var statement: OpaquePointer?
+
+        guard sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK else {
+            logger.log("Failed to prepare debug query", level: .error)
+            return
+        }
+
+        defer { sqlite3_finalize(statement) }
+
+        logger.log("=== All claude.ai cookies in \(source) ===", level: .info)
+        var count = 0
+        while sqlite3_step(statement) == SQLITE_ROW {
+            let name = String(cString: sqlite3_column_text(statement, 0))
+            let hostKey = String(cString: sqlite3_column_text(statement, 1))
+            let valueLen = sqlite3_column_int(statement, 2)
+            let encLen = sqlite3_column_int(statement, 3)
+
+            logger.log("Cookie: name='\(name)', host_key='\(hostKey)', value_len=\(valueLen), enc_len=\(encLen)", level: .info)
+            count += 1
+        }
+        logger.log("=== Found \(count) claude.ai cookies ===", level: .info)
+    }
+
+    private func extractCookie(db: OpaquePointer?, name: String, domain: String, source: String) -> String? {
+        // Try direct query first to test if it's a binding issue
         let query = """
         SELECT value, encrypted_value FROM cookies
-        WHERE name = ? AND (host_key = ? OR host_key = ?)
+        WHERE name = '\(name)' AND host_key LIKE '%claude.ai%'
         ORDER BY creation_utc DESC LIMIT 1
         """
+
+        logger.log("SQL Query: \(query)", level: .debug)
 
         var statement: OpaquePointer?
 
@@ -195,16 +240,19 @@ class CredentialExtractor {
 
         defer { sqlite3_finalize(statement) }
 
-        // Bind parameters
-        sqlite3_bind_text(statement, 1, name, -1, nil)
-        sqlite3_bind_text(statement, 2, domain, -1, nil)
-        sqlite3_bind_text(statement, 3, "claude.ai", -1, nil)
+        logger.log("Executing query for cookie: \(name)", level: .debug)
+        let stepResult = sqlite3_step(statement)
+        logger.log("Query step result: \(stepResult) (SQLITE_ROW=100, SQLITE_DONE=101)", level: .debug)
 
-        if sqlite3_step(statement) == SQLITE_ROW {
+        if stepResult == SQLITE_ROW {
+            logger.log("Found cookie row for \(name)", level: .debug)
+
             // Try plain text value first
             if let valuePtr = sqlite3_column_text(statement, 0) {
                 let value = String(cString: valuePtr)
+                logger.log("Plain text value length: \(value.count)", level: .debug)
                 if !value.isEmpty {
+                    logger.log("Using plain text value for \(name)", level: .debug)
                     return value
                 }
             }
@@ -212,38 +260,146 @@ class CredentialExtractor {
             // Try encrypted value (Chrome/Brave on macOS)
             if let encryptedPtr = sqlite3_column_blob(statement, 1) {
                 let encryptedLength = sqlite3_column_bytes(statement, 1)
+                logger.log("Encrypted value length: \(encryptedLength)", level: .debug)
                 if encryptedLength > 0 {
-                    logger.log("Cookie \(name) is encrypted, attempting to decrypt", level: .debug)
+                    logger.log("Cookie \(name) is encrypted, attempting to decrypt", level: .info)
                     let encryptedData = Data(bytes: encryptedPtr, count: Int(encryptedLength))
 
                     // Try to decrypt (Chrome v10+ encryption format)
-                    if let decrypted = decryptChromeValue(encryptedData) {
+                    if let decrypted = decryptChromeValue(encryptedData, source: source) {
+                        logger.log("Successfully decrypted \(name)", level: .info)
                         return decrypted
+                    } else {
+                        logger.log("Failed to decrypt \(name)", level: .warning)
                     }
                 }
+            } else {
+                logger.log("No encrypted value found for \(name)", level: .debug)
             }
+        } else {
+            logger.log("No cookie found for \(name)", level: .warning)
         }
 
         return nil
     }
 
-    private func decryptChromeValue(_ data: Data) -> String? {
-        // Chrome v10+ uses the format: v10 + encrypted data
-        // The encryption uses AES with a key stored in the Keychain
+    private func decryptChromeValue(_ data: Data, source: String) -> String? {
+        // Chrome v10+ uses the format: v10 + nonce(12) + ciphertext + tag(16)
+        // The encryption uses AES-128-GCM with a key stored in the Keychain
 
         guard data.count > 3 else { return nil }
 
         let prefix = data.prefix(3)
+        logger.log("Encrypted data prefix: \(prefix.map { String(format: "%02x", $0) }.joined())", level: .debug)
+        logger.log("Total encrypted data length: \(data.count)", level: .debug)
+
         if prefix != Data([0x76, 0x31, 0x30]) { // "v10"
             logger.log("Unexpected encryption format", level: .warning)
             return nil
         }
 
-        // For now, we'll log that we found encrypted cookies
-        // Full decryption requires accessing the Keychain which needs more complex implementation
-        logger.log("Found encrypted cookie (Chrome v10 format). Decryption not yet implemented.", level: .warning)
-        logger.log("Please use manual credential entry for now.", level: .info)
+        // Get the encryption key from Keychain
+        guard let key = getEncryptionKey(for: source) else {
+            logger.log("Could not retrieve encryption key from Keychain for \(source)", level: .warning)
+            return nil
+        }
 
+        logger.log("Encryption key length: \(key.count) bytes", level: .debug)
+        logger.log("Encryption key (hex): \(key.prefix(16).map { String(format: "%02x", $0) }.joined())...", level: .debug)
+
+        // The key from Keychain is Base64 encoded - decode it
+        let actualKey: Data
+        if let keyString = String(data: key, encoding: .utf8), let decodedKey = Data(base64Encoded: keyString) {
+            logger.log("Decoded Base64 key to \(decodedKey.count) bytes", level: .debug)
+            actualKey = decodedKey
+        } else {
+            // If not base64, use the key as-is
+            logger.log("Key is not Base64 encoded, using as-is", level: .debug)
+            actualKey = key
+        }
+
+        // v10 format: "v10" (3 bytes) + nonce (12 bytes) + ciphertext + auth tag (16 bytes)
+        let encryptedData = data.dropFirst(3) // Remove "v10" prefix
+
+        guard encryptedData.count >= 28 else { // 12 (nonce) + 16 (tag) minimum
+            logger.log("Encrypted data too short: \(encryptedData.count) bytes", level: .error)
+            return nil
+        }
+
+        let nonce = encryptedData.prefix(12)
+        let ciphertext = encryptedData.dropFirst(12)
+
+        logger.log("Nonce length: \(nonce.count), Ciphertext+Tag length: \(ciphertext.count)", level: .debug)
+
+        do {
+            let symmetricKey = SymmetricKey(data: actualKey)
+            let sealedBox = try AES.GCM.SealedBox(nonce: AES.GCM.Nonce(data: nonce), ciphertext: ciphertext.dropLast(16), tag: ciphertext.suffix(16))
+            let decryptedData = try AES.GCM.open(sealedBox, using: symmetricKey)
+
+            if let decryptedString = String(data: decryptedData, encoding: .utf8) {
+                logger.log("Successfully decrypted cookie", level: .info)
+                return decryptedString
+            }
+        } catch {
+            logger.log("Decryption failed: \(error.localizedDescription)", level: .error)
+            logger.log("This might indicate the key needs derivation or wrong data format", level: .warning)
+        }
+
+        return nil
+    }
+
+    private func getEncryptionKey(for source: String) -> Data? {
+        // Determine possible service/account combinations based on the source
+        let keychainQueries: [(service: String, account: String)]
+        switch source {
+        case "Brave Browser":
+            keychainQueries = [
+                ("Brave Safe Storage", "Brave"),
+                ("Chromium Safe Storage", "Chromium")
+            ]
+        case "Google Chrome":
+            keychainQueries = [
+                ("Chrome Safe Storage", "Chrome"),
+                ("Chromium Safe Storage", "Chromium")
+            ]
+        case "Claude Desktop":
+            keychainQueries = [
+                ("Claude Safe Storage", "Claude Key"),
+                ("Chromium Safe Storage", "Chromium"),
+                ("Electron Safe Storage", "Electron")
+            ]
+        default:
+            keychainQueries = [
+                ("Chrome Safe Storage", "Chrome"),
+                ("Chromium Safe Storage", "Chromium")
+            ]
+        }
+
+        // Try each service/account combination
+        for (serviceName, accountName) in keychainQueries {
+            logger.log("Attempting to retrieve key from Keychain: service='\(serviceName)', account='\(accountName)'", level: .debug)
+
+            // Query the Keychain
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: serviceName,
+                kSecAttrAccount as String: accountName,
+                kSecReturnData as String: true
+            ]
+
+            var result: AnyObject?
+            let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+            if status == errSecSuccess, let keyData = result as? Data {
+                logger.log("Successfully retrieved encryption key from Keychain: service='\(serviceName)', account='\(accountName)'", level: .info)
+                return keyData
+            } else {
+                let errorMessage = SecCopyErrorMessageString(status, nil) as String? ?? "Unknown error"
+                logger.log("Failed to retrieve key from \(serviceName)/\(accountName): \(errorMessage) (status: \(status))", level: .debug)
+            }
+        }
+
+        logger.log("Could not retrieve encryption key from any Keychain service for \(source)", level: .warning)
         return nil
     }
 }
