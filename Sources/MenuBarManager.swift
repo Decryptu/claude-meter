@@ -12,6 +12,9 @@ class MenuBarManager: NSObject {
     private var settingsWindowController: SettingsWindowController?
     private let logger = Logger.shared
 
+    // App version
+    private let appVersion = "1.0.1"
+
     // Auto-detection retry tracking
     private var lastAutoDetectionAttempt: Date?
     private let autoDetectionCooldownSeconds: TimeInterval = 300 // 5 minutes
@@ -285,6 +288,10 @@ class MenuBarManager: NSObject {
         }
 
         menu.addItem(NSMenuItem.separator())
+
+        let versionItem = NSMenuItem(title: "Version \(appVersion)", action: nil, keyEquivalent: "")
+        versionItem.isEnabled = false
+        menu.addItem(versionItem)
 
         let quitItem = NSMenuItem(title: "Quit ClaudeMeter", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
