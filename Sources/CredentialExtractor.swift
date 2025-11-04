@@ -1,7 +1,6 @@
 import Foundation
 import SQLite3
 import Security
-import CryptoKit
 import CommonCrypto
 
 class CredentialExtractor {
@@ -233,8 +232,9 @@ class CredentialExtractor {
     }
 
     private func decryptChromeValue(_ data: Data, source: String) -> String? {
-        // Chrome v10+ uses the format: v10 + nonce(12) + ciphertext + tag(16)
-        // The encryption uses AES-128-GCM with a key stored in the Keychain
+        // Chrome v10 uses AES-128-CBC with PBKDF2 key derivation
+        // Format: "v10" (3 bytes) + CBC encrypted data with PKCS7 padding
+        // IV: 16 space characters (0x20)
 
         guard data.count > 3 else { return nil }
 
@@ -247,78 +247,87 @@ class CredentialExtractor {
         }
 
         // Get the encryption key from Keychain
-        guard let key = getEncryptionKey(for: source) else {
+        guard let keychainPassword = getEncryptionKey(for: source) else {
             logger.log("Could not retrieve encryption key from Keychain for \(source)", level: .warning)
             return nil
         }
 
-        // Try different key processing methods
-        let keysToTry = prepareEncryptionKeys(from: key)
-
-        // v10 format: "v10" (3 bytes) + nonce (12 bytes) + ciphertext + auth tag (16 bytes)
-        let encryptedData = data.dropFirst(3) // Remove "v10" prefix
-
-        guard encryptedData.count >= 28 else { // 12 (nonce) + 16 (tag) minimum
-            logger.log("Encrypted data too short: \(encryptedData.count) bytes", level: .error)
+        // Derive the actual encryption key using PBKDF2
+        guard let derivedKey = deriveKeyWithPBKDF2(password: keychainPassword) else {
+            logger.log("Failed to derive encryption key", level: .error)
             return nil
         }
 
-        let nonce = encryptedData.prefix(12)
-        let ciphertextWithTag = encryptedData.dropFirst(12)
-        let ciphertext = ciphertextWithTag.dropLast(16)
-        let tag = ciphertextWithTag.suffix(16)
+        // v10 format: "v10" (3 bytes) + ciphertext (with PKCS7 padding)
+        let ciphertext = data.dropFirst(3)
 
-        // Try each key variant
-        for (index, keyData) in keysToTry.enumerated() {
-            do {
-                let symmetricKey = SymmetricKey(data: keyData)
-                let sealedBox = try AES.GCM.SealedBox(nonce: AES.GCM.Nonce(data: nonce), ciphertext: ciphertext, tag: tag)
-                let decryptedData = try AES.GCM.open(sealedBox, using: symmetricKey)
-
-                if let decryptedString = String(data: decryptedData, encoding: .utf8) {
-                    logger.log("Successfully decrypted cookie using key variant \(index)", level: .info)
-                    return decryptedString
-                }
-            } catch {
-                // Try next key variant
-                continue
-            }
+        guard ciphertext.count > 0 else {
+            logger.log("Encrypted data too short", level: .error)
+            return nil
         }
 
-        logger.log("All decryption attempts failed for \(source)", level: .warning)
+        // Decrypt using AES-128-CBC with 16 spaces as IV
+        // CCCrypt with kCCOptionPKCS7Padding automatically removes padding
+        let iv = Data(repeating: 0x20, count: 16) // 16 spaces
+
+        guard let decryptedData = decryptAES128CBC(ciphertext: ciphertext, key: derivedKey, iv: iv) else {
+            logger.log("CBC decryption failed for \(source)", level: .warning)
+            return nil
+        }
+
+        // For newer Chrome versions (db v24+), there may be a 32-byte SHA256 prefix
+        // Try with and without the prefix
+        let finalData: Data
+        if decryptedData.count > 32 {
+            // Try with 32-byte prefix removed (newer Chrome)
+            let withoutPrefix = decryptedData.dropFirst(32)
+            if let decoded = String(data: withoutPrefix, encoding: .utf8), !decoded.isEmpty && decoded.utf8.allSatisfy({ $0 >= 32 || $0 == 9 || $0 == 10 || $0 == 13 }) {
+                finalData = withoutPrefix
+            } else {
+                // No prefix, use as-is
+                finalData = decryptedData
+            }
+        } else {
+            finalData = decryptedData
+        }
+
+        if let decryptedString = String(data: finalData, encoding: .utf8) {
+            logger.log("Successfully decrypted cookie from \(source)", level: .info)
+            return decryptedString
+        }
+
         return nil
     }
 
-    private func prepareEncryptionKeys(from keychainData: Data) -> [Data] {
-        var keys: [Data] = []
+    private func decryptAES128CBC(ciphertext: Data, key: Data, iv: Data) -> Data? {
+        var decryptedData = Data(count: ciphertext.count + kCCBlockSizeAES128)
+        var numBytesDecrypted: size_t = 0
 
-        // Method 1: Try Base64 decoded key
-        if let keyString = String(data: keychainData, encoding: .utf8),
-           let decodedKey = Data(base64Encoded: keyString) {
-            keys.append(decodedKey)
-
-            // Method 2: Try PBKDF2 derivation on the decoded key (Chrome on macOS)
-            if let derivedKey = deriveKeyWithPBKDF2(password: decodedKey) {
-                keys.append(derivedKey)
+        let cryptStatus = ciphertext.withUnsafeBytes { ciphertextBytes in
+            key.withUnsafeBytes { keyBytes in
+                iv.withUnsafeBytes { ivBytes in
+                    decryptedData.withUnsafeMutableBytes { decryptedBytes in
+                        CCCrypt(
+                            CCOperation(kCCDecrypt),
+                            CCAlgorithm(kCCAlgorithmAES),
+                            CCOptions(kCCOptionPKCS7Padding),
+                            keyBytes.baseAddress, key.count,
+                            ivBytes.baseAddress,
+                            ciphertextBytes.baseAddress, ciphertext.count,
+                            decryptedBytes.baseAddress, decryptedData.count,
+                            &numBytesDecrypted
+                        )
+                    }
+                }
             }
         }
 
-        // Method 3: Try raw key data
-        keys.append(keychainData)
-
-        // Method 4: Try PBKDF2 on raw key
-        if let derivedKey = deriveKeyWithPBKDF2(password: keychainData) {
-            keys.append(derivedKey)
+        guard cryptStatus == kCCSuccess else {
+            return nil
         }
 
-        // Method 5: Try treating the key as a password string for PBKDF2
-        if let keyString = String(data: keychainData, encoding: .utf8) {
-            if let derivedKey = deriveKeyWithPBKDF2(password: Data(keyString.utf8)) {
-                keys.append(derivedKey)
-            }
-        }
-
-        return keys
+        decryptedData.count = numBytesDecrypted
+        return decryptedData
     }
 
     private func deriveKeyWithPBKDF2(password: Data) -> Data? {
