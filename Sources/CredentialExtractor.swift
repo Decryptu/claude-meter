@@ -1,5 +1,7 @@
 import Foundation
 import SQLite3
+import Security
+import CryptoKit
 
 class CredentialExtractor {
     private let logger = Logger.shared
@@ -150,10 +152,10 @@ class CredentialExtractor {
             defer { sqlite3_close(db) }
 
             // Extract sessionKey
-            let sessionKey = extractCookie(db: db, name: "sessionKey", domain: ".claude.ai")
+            let sessionKey = extractCookie(db: db, name: "sessionKey", domain: ".claude.ai", source: source)
 
             // Extract organization ID from lastActiveOrg
-            let orgId = extractCookie(db: db, name: "lastActiveOrg", domain: ".claude.ai")
+            let orgId = extractCookie(db: db, name: "lastActiveOrg", domain: ".claude.ai", source: source)
 
             if let sessionKey = sessionKey {
                 logger.log("Found sessionKey in \(source)", level: .info)
@@ -179,7 +181,7 @@ class CredentialExtractor {
         return nil
     }
 
-    private func extractCookie(db: OpaquePointer?, name: String, domain: String) -> String? {
+    private func extractCookie(db: OpaquePointer?, name: String, domain: String, source: String) -> String? {
         let query = """
         SELECT value, encrypted_value FROM cookies
         WHERE name = ? AND (host_key = ? OR host_key = ?)
@@ -217,7 +219,7 @@ class CredentialExtractor {
                     let encryptedData = Data(bytes: encryptedPtr, count: Int(encryptedLength))
 
                     // Try to decrypt (Chrome v10+ encryption format)
-                    if let decrypted = decryptChromeValue(encryptedData) {
+                    if let decrypted = decryptChromeValue(encryptedData, source: source) {
                         return decrypted
                     }
                 }
@@ -227,9 +229,9 @@ class CredentialExtractor {
         return nil
     }
 
-    private func decryptChromeValue(_ data: Data) -> String? {
-        // Chrome v10+ uses the format: v10 + encrypted data
-        // The encryption uses AES with a key stored in the Keychain
+    private func decryptChromeValue(_ data: Data, source: String) -> String? {
+        // Chrome v10+ uses the format: v10 + nonce(12) + ciphertext + tag(16)
+        // The encryption uses AES-128-GCM with a key stored in the Keychain
 
         guard data.count > 3 else { return nil }
 
@@ -239,11 +241,73 @@ class CredentialExtractor {
             return nil
         }
 
-        // For now, we'll log that we found encrypted cookies
-        // Full decryption requires accessing the Keychain which needs more complex implementation
-        logger.log("Found encrypted cookie (Chrome v10 format). Decryption not yet implemented.", level: .warning)
-        logger.log("Please use manual credential entry for now.", level: .info)
+        // Get the encryption key from Keychain
+        guard let key = getEncryptionKey(for: source) else {
+            logger.log("Could not retrieve encryption key from Keychain for \(source)", level: .warning)
+            return nil
+        }
+
+        // v10 format: "v10" (3 bytes) + nonce (12 bytes) + ciphertext + auth tag (16 bytes)
+        let encryptedData = data.dropFirst(3) // Remove "v10" prefix
+
+        guard encryptedData.count >= 28 else { // 12 (nonce) + 16 (tag) minimum
+            logger.log("Encrypted data too short", level: .error)
+            return nil
+        }
+
+        let nonce = encryptedData.prefix(12)
+        let ciphertext = encryptedData.dropFirst(12)
+
+        do {
+            let symmetricKey = SymmetricKey(data: key)
+            let sealedBox = try AES.GCM.SealedBox(nonce: AES.GCM.Nonce(data: nonce), ciphertext: ciphertext.dropLast(16), tag: ciphertext.suffix(16))
+            let decryptedData = try AES.GCM.open(sealedBox, using: symmetricKey)
+
+            if let decryptedString = String(data: decryptedData, encoding: .utf8) {
+                logger.log("Successfully decrypted cookie", level: .debug)
+                return decryptedString
+            }
+        } catch {
+            logger.log("Decryption failed: \(error.localizedDescription)", level: .error)
+        }
 
         return nil
+    }
+
+    private func getEncryptionKey(for source: String) -> Data? {
+        // Determine the service name based on the source
+        let serviceName: String
+        switch source {
+        case "Brave Browser":
+            serviceName = "Brave Safe Storage"
+        case "Google Chrome":
+            serviceName = "Chrome Safe Storage"
+        case "Claude Desktop":
+            serviceName = "Claude Safe Storage"
+        default:
+            serviceName = "Chrome Safe Storage"
+        }
+
+        logger.log("Attempting to retrieve key from Keychain service: \(serviceName)", level: .debug)
+
+        // Query the Keychain
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceName,
+            kSecAttrAccount as String: serviceName,
+            kSecReturnData as String: true
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        if status == errSecSuccess, let keyData = result as? Data {
+            logger.log("Successfully retrieved encryption key from Keychain", level: .debug)
+            return keyData
+        } else {
+            let errorMessage = SecCopyErrorMessageString(status, nil) as String? ?? "Unknown error"
+            logger.log("Failed to retrieve key from Keychain: \(errorMessage) (status: \(status))", level: .warning)
+            return nil
+        }
     }
 }
