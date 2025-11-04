@@ -329,39 +329,45 @@ class CredentialExtractor {
     }
 
     private func getEncryptionKey(for source: String) -> Data? {
-        // Determine the service name based on the source
-        let serviceName: String
+        // Determine possible service names based on the source
+        let serviceNames: [String]
         switch source {
         case "Brave Browser":
-            serviceName = "Brave Safe Storage"
+            serviceNames = ["Brave Safe Storage", "Chromium Safe Storage"]
         case "Google Chrome":
-            serviceName = "Chrome Safe Storage"
+            serviceNames = ["Chrome Safe Storage", "Chromium Safe Storage"]
         case "Claude Desktop":
-            serviceName = "Claude Safe Storage"
+            // Claude Desktop is an Electron app, try various Electron/Chromium names
+            serviceNames = ["Chromium Safe Storage", "Electron Safe Storage", "Claude Safe Storage"]
         default:
-            serviceName = "Chrome Safe Storage"
+            serviceNames = ["Chrome Safe Storage", "Chromium Safe Storage"]
         }
 
-        logger.log("Attempting to retrieve key from Keychain service: \(serviceName)", level: .debug)
+        // Try each service name
+        for serviceName in serviceNames {
+            logger.log("Attempting to retrieve key from Keychain service: \(serviceName)", level: .debug)
 
-        // Query the Keychain
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: serviceName,
-            kSecAttrAccount as String: serviceName,
-            kSecReturnData as String: true
-        ]
+            // Query the Keychain
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: serviceName,
+                kSecAttrAccount as String: serviceName,
+                kSecReturnData as String: true
+            ]
 
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+            var result: AnyObject?
+            let status = SecItemCopyMatching(query as CFDictionary, &result)
 
-        if status == errSecSuccess, let keyData = result as? Data {
-            logger.log("Successfully retrieved encryption key from Keychain", level: .debug)
-            return keyData
-        } else {
-            let errorMessage = SecCopyErrorMessageString(status, nil) as String? ?? "Unknown error"
-            logger.log("Failed to retrieve key from Keychain: \(errorMessage) (status: \(status))", level: .warning)
-            return nil
+            if status == errSecSuccess, let keyData = result as? Data {
+                logger.log("Successfully retrieved encryption key from Keychain service: \(serviceName)", level: .info)
+                return keyData
+            } else {
+                let errorMessage = SecCopyErrorMessageString(status, nil) as String? ?? "Unknown error"
+                logger.log("Failed to retrieve key from \(serviceName): \(errorMessage) (status: \(status))", level: .debug)
+            }
         }
+
+        logger.log("Could not retrieve encryption key from any Keychain service for \(source)", level: .warning)
+        return nil
     }
 }
