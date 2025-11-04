@@ -2,7 +2,7 @@
   <img width="64" height="64" alt="logo" src="https://github.com/user-attachments/assets/fd5bcb74-816c-4fc0-b284-096567a9f519" />
 </p>
 
-# ClaudeMeter
+<h1 align="center">ClaudeMeter</h1>
 
 <p align="center">
   A native macOS menu bar app that displays your Claude AI usage in real-time with <strong>automatic credential detection</strong>.
