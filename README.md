@@ -20,7 +20,7 @@
 ## Features
 
 - **Automatic Setup** — Detects your Claude Desktop or browser session
-- **Menu Bar Integration** — Ring indicator with color-coded usage
+- **Menu Bar Integration** — Ring indicator
 - **Real-Time Updates** — Refreshes every 60 seconds
 - **Launch at Login** — Toggle from the menu
 - **Modern UI** — SwiftUI, native macOS 13-26 interface
