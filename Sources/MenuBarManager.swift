@@ -21,6 +21,7 @@ class MenuBarManager: NSObject {
         setupMenu()
         loadSettings()
         updateIcon(percentage: nil)
+        updateMenu()  // Initialize menu even without credentials
         startPeriodicRefresh()
     }
 
@@ -72,6 +73,9 @@ class MenuBarManager: NSObject {
                 }
             } else {
                 logger.log("Auto-detection failed, user needs to configure manually", level: .warning)
+                await MainActor.run {
+                    updateMenu()  // Update menu to show setup options
+                }
             }
         }
     }
@@ -189,9 +193,12 @@ class MenuBarManager: NSObject {
                 percentageItem.isEnabled = false
                 menu.addItem(percentageItem)
 
-                let resetItem = NSMenuItem(title: "Resets in: \(fiveHour.timeUntilReset)", action: nil, keyEquivalent: "")
-                resetItem.isEnabled = false
-                menu.addItem(resetItem)
+                // Only show reset time if it's available
+                if fiveHour.resetsAt != nil {
+                    let resetItem = NSMenuItem(title: "Resets in: \(fiveHour.timeUntilReset)", action: nil, keyEquivalent: "")
+                    resetItem.isEnabled = false
+                    menu.addItem(resetItem)
+                }
 
                 let lastUpdated = NSMenuItem(title: "Last updated: just now", action: nil, keyEquivalent: "")
                 lastUpdated.isEnabled = false

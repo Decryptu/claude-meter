@@ -18,7 +18,7 @@ struct UsageResponse: Codable {
 
 struct UsagePeriod: Codable {
     let utilization: Double
-    let resetsAt: String
+    let resetsAt: String?
 
     enum CodingKeys: String, CodingKey {
         case utilization
@@ -26,13 +26,14 @@ struct UsagePeriod: Codable {
     }
 
     var resetsAtDate: Date? {
+        guard let resetsAt = resetsAt else { return nil }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.date(from: resetsAt)
     }
 
     var timeUntilReset: String {
-        guard let resetDate = resetsAtDate else { return "Unknown" }
+        guard let resetDate = resetsAtDate else { return "N/A" }
         let now = Date()
         let interval = resetDate.timeIntervalSince(now)
 
