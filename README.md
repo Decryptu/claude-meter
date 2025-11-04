@@ -1,8 +1,13 @@
 # ClaudeMeter
 
+<img width="256" height="256" alt="logo" src="https://github.com/user-attachments/assets/fd5bcb74-816c-4fc0-b284-096567a9f519" />
+
 A native macOS menu bar app that displays your Claude AI usage in real-time with **automatic credential detection**.
 
 <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform: macOS"> <img src="https://img.shields.io/badge/swift-5.9+-orange" alt="Swift 5.9+"> <img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT">
+
+<img width="393" height="333" alt="Screenshot 2025-11-04 at 18 40 13" src="https://github.com/user-attachments/assets/e4fb1e3a-1784-4634-a453-8c0091a4ebb6" />
+
 
 ## Features
 
