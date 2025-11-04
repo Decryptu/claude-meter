@@ -329,29 +329,41 @@ class CredentialExtractor {
     }
 
     private func getEncryptionKey(for source: String) -> Data? {
-        // Determine possible service names based on the source
-        let serviceNames: [String]
+        // Determine possible service/account combinations based on the source
+        let keychainQueries: [(service: String, account: String)]
         switch source {
         case "Brave Browser":
-            serviceNames = ["Brave Safe Storage", "Chromium Safe Storage"]
+            keychainQueries = [
+                ("Brave Safe Storage", "Brave"),
+                ("Chromium Safe Storage", "Chromium")
+            ]
         case "Google Chrome":
-            serviceNames = ["Chrome Safe Storage", "Chromium Safe Storage"]
+            keychainQueries = [
+                ("Chrome Safe Storage", "Chrome"),
+                ("Chromium Safe Storage", "Chromium")
+            ]
         case "Claude Desktop":
-            // Claude Desktop is an Electron app, try various Electron/Chromium names
-            serviceNames = ["Chromium Safe Storage", "Electron Safe Storage", "Claude Safe Storage"]
+            keychainQueries = [
+                ("Claude Safe Storage", "Claude Key"),
+                ("Chromium Safe Storage", "Chromium"),
+                ("Electron Safe Storage", "Electron")
+            ]
         default:
-            serviceNames = ["Chrome Safe Storage", "Chromium Safe Storage"]
+            keychainQueries = [
+                ("Chrome Safe Storage", "Chrome"),
+                ("Chromium Safe Storage", "Chromium")
+            ]
         }
 
-        // Try each service name
-        for serviceName in serviceNames {
-            logger.log("Attempting to retrieve key from Keychain service: \(serviceName)", level: .debug)
+        // Try each service/account combination
+        for (serviceName, accountName) in keychainQueries {
+            logger.log("Attempting to retrieve key from Keychain: service='\(serviceName)', account='\(accountName)'", level: .debug)
 
             // Query the Keychain
             let query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: serviceName,
-                kSecAttrAccount as String: serviceName,
+                kSecAttrAccount as String: accountName,
                 kSecReturnData as String: true
             ]
 
@@ -359,11 +371,11 @@ class CredentialExtractor {
             let status = SecItemCopyMatching(query as CFDictionary, &result)
 
             if status == errSecSuccess, let keyData = result as? Data {
-                logger.log("Successfully retrieved encryption key from Keychain service: \(serviceName)", level: .info)
+                logger.log("Successfully retrieved encryption key from Keychain: service='\(serviceName)', account='\(accountName)'", level: .info)
                 return keyData
             } else {
                 let errorMessage = SecCopyErrorMessageString(status, nil) as String? ?? "Unknown error"
-                logger.log("Failed to retrieve key from \(serviceName): \(errorMessage) (status: \(status))", level: .debug)
+                logger.log("Failed to retrieve key from \(serviceName)/\(accountName): \(errorMessage) (status: \(status))", level: .debug)
             }
         }
 
