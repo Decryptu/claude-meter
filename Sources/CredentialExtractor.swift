@@ -300,7 +300,8 @@ class CredentialExtractor {
     }
 
     private func decryptAES128CBC(ciphertext: Data, key: Data, iv: Data) -> Data? {
-        var decryptedData = Data(count: ciphertext.count + kCCBlockSizeAES128)
+        let bufferSize = ciphertext.count + kCCBlockSizeAES128
+        var decryptedData = Data(count: bufferSize)
         var numBytesDecrypted: size_t = 0
 
         let cryptStatus = ciphertext.withUnsafeBytes { ciphertextBytes in
@@ -314,7 +315,7 @@ class CredentialExtractor {
                             keyBytes.baseAddress, key.count,
                             ivBytes.baseAddress,
                             ciphertextBytes.baseAddress, ciphertext.count,
-                            decryptedBytes.baseAddress, decryptedData.count,
+                            decryptedBytes.baseAddress, bufferSize,
                             &numBytesDecrypted
                         )
                     }
