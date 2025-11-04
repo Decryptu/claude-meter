@@ -307,6 +307,17 @@ class CredentialExtractor {
         logger.log("Encryption key length: \(key.count) bytes", level: .debug)
         logger.log("Encryption key (hex): \(key.prefix(16).map { String(format: "%02x", $0) }.joined())...", level: .debug)
 
+        // The key from Keychain is Base64 encoded - decode it
+        let actualKey: Data
+        if let keyString = String(data: key, encoding: .utf8), let decodedKey = Data(base64Encoded: keyString) {
+            logger.log("Decoded Base64 key to \(decodedKey.count) bytes", level: .debug)
+            actualKey = decodedKey
+        } else {
+            // If not base64, use the key as-is
+            logger.log("Key is not Base64 encoded, using as-is", level: .debug)
+            actualKey = key
+        }
+
         // v10 format: "v10" (3 bytes) + nonce (12 bytes) + ciphertext + auth tag (16 bytes)
         let encryptedData = data.dropFirst(3) // Remove "v10" prefix
 
@@ -321,7 +332,7 @@ class CredentialExtractor {
         logger.log("Nonce length: \(nonce.count), Ciphertext+Tag length: \(ciphertext.count)", level: .debug)
 
         do {
-            let symmetricKey = SymmetricKey(data: key)
+            let symmetricKey = SymmetricKey(data: actualKey)
             let sealedBox = try AES.GCM.SealedBox(nonce: AES.GCM.Nonce(data: nonce), ciphertext: ciphertext.dropLast(16), tag: ciphertext.suffix(16))
             let decryptedData = try AES.GCM.open(sealedBox, using: symmetricKey)
 
