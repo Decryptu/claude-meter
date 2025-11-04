@@ -224,7 +224,7 @@ class CredentialExtractor {
     private func extractCookie(db: OpaquePointer?, name: String, domain: String, source: String) -> String? {
         let query = """
         SELECT value, encrypted_value FROM cookies
-        WHERE name = ? AND (host_key = ? OR host_key = ?)
+        WHERE name = ? AND host_key LIKE ?
         ORDER BY creation_utc DESC LIMIT 1
         """
 
@@ -239,8 +239,7 @@ class CredentialExtractor {
 
         // Bind parameters
         sqlite3_bind_text(statement, 1, name, -1, nil)
-        sqlite3_bind_text(statement, 2, domain, -1, nil)
-        sqlite3_bind_text(statement, 3, "claude.ai", -1, nil)
+        sqlite3_bind_text(statement, 2, "%claude.ai%", -1, nil)
 
         logger.log("Executing query for cookie: \(name)", level: .debug)
         let stepResult = sqlite3_step(statement)
