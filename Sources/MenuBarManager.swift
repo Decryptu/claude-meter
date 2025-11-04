@@ -9,12 +9,15 @@ class MenuBarManager: NSObject {
     private var timer: Timer?
     private var apiClient: ClaudeAPIClient?
     private var settings: ClaudeSettings?
+    private var settingsWindowController: SettingsWindowController?
+    private let logger = Logger.shared
 
     init(statusItem: NSStatusItem, button: NSStatusBarButton) {
         self.statusItem = statusItem
         self.button = button
         super.init()
 
+        logger.log("MenuBarManager initializing", level: .info)
         setupMenu()
         loadSettings()
         updateIcon(percentage: nil)
@@ -22,13 +25,64 @@ class MenuBarManager: NSObject {
     }
 
     private func loadSettings() {
+        logger.log("Loading settings", level: .info)
         settings = ClaudeSettings.load()
+
         if let settings = settings {
+            logger.log("Settings loaded successfully", level: .info)
+            logger.log("Organization ID: \(settings.organizationId)", level: .debug)
             apiClient = ClaudeAPIClient(settings: settings)
             Task {
                 await refreshUsage()
             }
+        } else {
+            logger.log("No settings found, attempting auto-detection", level: .info)
+            // Try auto-detection on first run
+            tryAutoDetection()
         }
+    }
+
+    private func tryAutoDetection() {
+        Task {
+            let extractor = CredentialExtractor()
+            if let credentials = extractor.extractCredentials() {
+                logger.log("Auto-detection successful", level: .info)
+
+                await MainActor.run {
+                    if let orgId = credentials.organizationId, let sessionKey = credentials.sessionKey {
+                        let newSettings = ClaudeSettings(
+                            organizationId: orgId,
+                            sessionKey: sessionKey
+                        )
+
+                        do {
+                            try newSettings.save()
+                            settings = newSettings
+                            apiClient = ClaudeAPIClient(settings: newSettings)
+
+                            Task {
+                                await refreshUsage()
+                            }
+
+                            showNotification(title: "ClaudeMeter Ready", message: "Credentials detected from \(credentials.source)")
+                        } catch {
+                            logger.log("Error saving auto-detected settings: \(error)", level: .error)
+                        }
+                    }
+                }
+            } else {
+                logger.log("Auto-detection failed, user needs to configure manually", level: .warning)
+            }
+        }
+    }
+
+    private func showNotification(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     private func setupMenu() {
@@ -38,6 +92,7 @@ class MenuBarManager: NSObject {
     }
 
     private func startPeriodicRefresh() {
+        logger.log("Starting periodic refresh (60s interval)", level: .debug)
         // Refresh every 60 seconds
         timer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -48,17 +103,23 @@ class MenuBarManager: NSObject {
 
     @MainActor
     private func refreshUsage() async {
-        guard let apiClient = apiClient else { return }
+        guard let apiClient = apiClient else {
+            logger.log("Cannot refresh: No API client configured", level: .debug)
+            return
+        }
+
+        logger.log("Fetching usage data", level: .debug)
 
         do {
             usageData = try await apiClient.fetchUsage()
             updateMenu()
 
             if let percentage = usageData?.fiveHour?.utilization {
+                logger.log("Usage: \(percentage)%", level: .debug)
                 updateIcon(percentage: percentage)
             }
         } catch {
-            print("Error fetching usage: \(error)")
+            logger.log("Error fetching usage: \(error)", level: .error)
             updateIcon(percentage: nil)
         }
     }
@@ -115,7 +176,7 @@ class MenuBarManager: NSObject {
     private func updateMenu() {
         menu.removeAllItems()
 
-        if let settings = settings, let usage = usageData {
+        if let usage = usageData, settings != nil {
             // Current session section
             if let fiveHour = usage.fiveHour {
                 let headerItem = NSMenuItem(title: "Claude Usage", action: nil, keyEquivalent: "")
@@ -143,9 +204,21 @@ class MenuBarManager: NSObject {
             refreshItem.target = self
             menu.addItem(refreshItem)
 
+            // Launch at login toggle
+            let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+            launchAtLoginItem.target = self
+            launchAtLoginItem.state = LaunchAtLoginHelper.isEnabled ? .on : .off
+            menu.addItem(launchAtLoginItem)
+
+            menu.addItem(NSMenuItem.separator())
+
             let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
             settingsItem.target = self
             menu.addItem(settingsItem)
+
+            let logsItem = NSMenuItem(title: "View Logs", action: #selector(openLogs), keyEquivalent: "")
+            logsItem.target = self
+            menu.addItem(logsItem)
         } else {
             let setupItem = NSMenuItem(title: "⚠️ Setup Required", action: nil, keyEquivalent: "")
             setupItem.isEnabled = false
@@ -156,6 +229,10 @@ class MenuBarManager: NSObject {
             let configItem = NSMenuItem(title: "Configure Settings...", action: #selector(openSettings), keyEquivalent: "")
             configItem.target = self
             menu.addItem(configItem)
+
+            let logsItem = NSMenuItem(title: "View Logs", action: #selector(openLogs), keyEquivalent: "")
+            logsItem.target = self
+            menu.addItem(logsItem)
         }
 
         menu.addItem(NSMenuItem.separator())
@@ -166,70 +243,55 @@ class MenuBarManager: NSObject {
     }
 
     @objc private func refreshNow() {
+        logger.log("Manual refresh triggered", level: .info)
         Task { @MainActor in
             await refreshUsage()
         }
     }
 
-    @objc private func openSettings() {
-        let alert = NSAlert()
-        alert.messageText = "Claude Meter Settings"
-        alert.informativeText = "Enter your Claude organization ID and session key.\n\nYou can find these in your browser when visiting claude.ai/settings/usage"
-
-        let stackView = NSStackView()
-        stackView.orientation = .vertical
-        stackView.spacing = 8
-        stackView.alignment = .leading
-
-        let orgIdLabel = NSTextField(labelWithString: "Organization ID:")
-        let orgIdField = NSTextField(frame: NSRect(x: 0, y: 0, width: 400, height: 24))
-        orgIdField.placeholderString = "e.g., 6e35a193-deaa-46a0-80bd-f7a1652d383f"
-        if let settings = settings {
-            orgIdField.stringValue = settings.organizationId
-        }
-
-        let sessionKeyLabel = NSTextField(labelWithString: "Session Key:")
-        let sessionKeyField = NSTextField(frame: NSRect(x: 0, y: 0, width: 400, height: 24))
-        sessionKeyField.placeholderString = "sk-ant-sid01-..."
-        if let settings = settings {
-            sessionKeyField.stringValue = settings.sessionKey
-        }
-
-        stackView.addArrangedSubview(orgIdLabel)
-        stackView.addArrangedSubview(orgIdField)
-        stackView.addArrangedSubview(sessionKeyLabel)
-        stackView.addArrangedSubview(sessionKeyField)
-
-        alert.accessoryView = stackView
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
-
-        let response = alert.runModal()
-
-        if response == .alertFirstButtonReturn {
-            let newSettings = ClaudeSettings(
-                organizationId: orgIdField.stringValue,
-                sessionKey: sessionKeyField.stringValue
-            )
-
-            do {
-                try newSettings.save()
-                settings = newSettings
-                apiClient = ClaudeAPIClient(settings: newSettings)
-
-                Task { @MainActor in
-                    await refreshUsage()
-                }
-            } catch {
-                let errorAlert = NSAlert()
-                errorAlert.messageText = "Error Saving Settings"
-                errorAlert.informativeText = error.localizedDescription
-                errorAlert.runModal()
-            }
+    @objc private func toggleLaunchAtLogin() {
+        do {
+            try LaunchAtLoginHelper.toggle()
+            logger.log("Launch at login toggled: \(LaunchAtLoginHelper.isEnabled)", level: .info)
+            updateMenu()
+        } catch {
+            logger.log("Error toggling launch at login: \(error)", level: .error)
+            let alert = NSAlert()
+            alert.messageText = "Error"
+            alert.informativeText = "Could not toggle launch at login: \(error.localizedDescription)"
+            alert.alertStyle = .warning
+            alert.runModal()
         }
     }
 
+    @objc private func openSettings() {
+        logger.log("Opening settings window", level: .info)
+
+        if settingsWindowController == nil {
+            settingsWindowController = SettingsWindowController(currentSettings: settings) { [weak self] newSettings in
+                self?.logger.log("Settings updated", level: .info)
+                self?.settings = newSettings
+                self?.apiClient = ClaudeAPIClient(settings: newSettings)
+
+                Task { @MainActor in
+                    await self?.refreshUsage()
+                }
+            }
+        }
+
+        settingsWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func openLogs() {
+        let logPath = logger.getLogFilePath()
+        logger.log("Opening logs at: \(logPath)", level: .info)
+
+        NSWorkspace.shared.open(URL(fileURLWithPath: logPath))
+    }
+
     @objc private func quit() {
+        logger.log("ClaudeMeter quitting", level: .info)
         NSApplication.shared.terminate(nil)
     }
 }
