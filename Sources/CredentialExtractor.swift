@@ -154,6 +154,9 @@ class CredentialExtractor {
             defer { sqlite3_close(db) }
             logger.log("Database opened successfully for \(source)", level: .debug)
 
+            // Debug: List all claude.ai cookies to understand the schema
+            listAllClaudeCookies(db: db, source: source)
+
             // Extract sessionKey
             logger.log("Extracting sessionKey from \(source)", level: .debug)
             let sessionKey = extractCookie(db: db, name: "sessionKey", domain: ".claude.ai", source: source)
@@ -185,6 +188,37 @@ class CredentialExtractor {
 
         logger.log("Returning nil from extractFromCookieDatabase for \(source)", level: .debug)
         return nil
+    }
+
+    private func listAllClaudeCookies(db: OpaquePointer?, source: String) {
+        let query = """
+        SELECT name, host_key, length(value) as value_len, length(encrypted_value) as enc_len
+        FROM cookies
+        WHERE host_key LIKE '%claude.ai%'
+        LIMIT 20
+        """
+
+        var statement: OpaquePointer?
+
+        guard sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK else {
+            logger.log("Failed to prepare debug query", level: .error)
+            return
+        }
+
+        defer { sqlite3_finalize(statement) }
+
+        logger.log("=== All claude.ai cookies in \(source) ===", level: .info)
+        var count = 0
+        while sqlite3_step(statement) == SQLITE_ROW {
+            let name = String(cString: sqlite3_column_text(statement, 0))
+            let hostKey = String(cString: sqlite3_column_text(statement, 1))
+            let valueLen = sqlite3_column_int(statement, 2)
+            let encLen = sqlite3_column_int(statement, 3)
+
+            logger.log("Cookie: name='\(name)', host_key='\(hostKey)', value_len=\(valueLen), enc_len=\(encLen)", level: .info)
+            count += 1
+        }
+        logger.log("=== Found \(count) claude.ai cookies ===", level: .info)
     }
 
     private func extractCookie(db: OpaquePointer?, name: String, domain: String, source: String) -> String? {
