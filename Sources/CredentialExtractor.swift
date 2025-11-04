@@ -138,11 +138,13 @@ class CredentialExtractor {
         let tempPath = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 
         do {
+            logger.log("Copying database for \(source)", level: .debug)
             try FileManager.default.copyItem(at: path, to: tempPath)
             defer { try? FileManager.default.removeItem(at: tempPath) }
 
             var db: OpaquePointer?
 
+            logger.log("Opening database for \(source)", level: .debug)
             guard sqlite3_open(tempPath.path, &db) == SQLITE_OK else {
                 logger.log("Failed to open database: \(String(cString: sqlite3_errmsg(db)))", level: .error)
                 sqlite3_close(db)
@@ -150,11 +152,14 @@ class CredentialExtractor {
             }
 
             defer { sqlite3_close(db) }
+            logger.log("Database opened successfully for \(source)", level: .debug)
 
             // Extract sessionKey
+            logger.log("Extracting sessionKey from \(source)", level: .debug)
             let sessionKey = extractCookie(db: db, name: "sessionKey", domain: ".claude.ai", source: source)
 
             // Extract organization ID from lastActiveOrg
+            logger.log("Extracting lastActiveOrg from \(source)", level: .debug)
             let orgId = extractCookie(db: db, name: "lastActiveOrg", domain: ".claude.ai", source: source)
 
             if let sessionKey = sessionKey {
@@ -175,9 +180,10 @@ class CredentialExtractor {
             }
 
         } catch {
-            logger.log("Error copying database: \(error.localizedDescription)", level: .error)
+            logger.log("Error accessing database for \(source): \(error.localizedDescription)", level: .error)
         }
 
+        logger.log("Returning nil from extractFromCookieDatabase for \(source)", level: .debug)
         return nil
     }
 
@@ -202,11 +208,19 @@ class CredentialExtractor {
         sqlite3_bind_text(statement, 2, domain, -1, nil)
         sqlite3_bind_text(statement, 3, "claude.ai", -1, nil)
 
-        if sqlite3_step(statement) == SQLITE_ROW {
+        logger.log("Executing query for cookie: \(name)", level: .debug)
+        let stepResult = sqlite3_step(statement)
+        logger.log("Query step result: \(stepResult) (SQLITE_ROW=100, SQLITE_DONE=101)", level: .debug)
+
+        if stepResult == SQLITE_ROW {
+            logger.log("Found cookie row for \(name)", level: .debug)
+
             // Try plain text value first
             if let valuePtr = sqlite3_column_text(statement, 0) {
                 let value = String(cString: valuePtr)
+                logger.log("Plain text value length: \(value.count)", level: .debug)
                 if !value.isEmpty {
+                    logger.log("Using plain text value for \(name)", level: .debug)
                     return value
                 }
             }
@@ -214,16 +228,24 @@ class CredentialExtractor {
             // Try encrypted value (Chrome/Brave on macOS)
             if let encryptedPtr = sqlite3_column_blob(statement, 1) {
                 let encryptedLength = sqlite3_column_bytes(statement, 1)
+                logger.log("Encrypted value length: \(encryptedLength)", level: .debug)
                 if encryptedLength > 0 {
-                    logger.log("Cookie \(name) is encrypted, attempting to decrypt", level: .debug)
+                    logger.log("Cookie \(name) is encrypted, attempting to decrypt", level: .info)
                     let encryptedData = Data(bytes: encryptedPtr, count: Int(encryptedLength))
 
                     // Try to decrypt (Chrome v10+ encryption format)
                     if let decrypted = decryptChromeValue(encryptedData, source: source) {
+                        logger.log("Successfully decrypted \(name)", level: .info)
                         return decrypted
+                    } else {
+                        logger.log("Failed to decrypt \(name)", level: .warning)
                     }
                 }
+            } else {
+                logger.log("No encrypted value found for \(name)", level: .debug)
             }
+        } else {
+            logger.log("No cookie found for \(name)", level: .warning)
         }
 
         return nil
