@@ -29,7 +29,7 @@
 ## Quick Start
 
 ```bash
-git clone https://github.com/yourusername/claude-meter.git
+git clone https://github.com/decryptu/claude-meter.git
 cd claude-meter
 ./run.sh
 ```
