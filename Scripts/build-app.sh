@@ -51,6 +51,14 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp ".build/release/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 
+# Copy icon if it exists
+if [ -f "Resources/AppIcon.icns" ]; then
+    cp "Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/"
+    echo "✅ Icon included"
+else
+    echo "⚠️  Warning: Icon not found (run ./Scripts/generate-icon.sh first)"
+fi
+
 # Create Info.plist
 cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -61,6 +69,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <string>en</string>
     <key>CFBundleExecutable</key>
     <string>$APP_NAME</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>$BUNDLE_ID</string>
     <key>CFBundleInfoDictionaryVersion</key>

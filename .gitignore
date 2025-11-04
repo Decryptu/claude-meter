@@ -28,6 +28,9 @@ dist/
 settings.json
 .config/
 
+# Temporary files for icon generation
+tmp/
+
 # IDE
 .vscode/
 .idea/

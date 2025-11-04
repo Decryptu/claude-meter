@@ -97,6 +97,11 @@ To find credentials manually:
 
 ## Building for Distribution
 
+**First time only - Generate app icon:**
+```bash
+./Scripts/generate-icon.sh
+```
+
 **Create .app bundle:**
 ```bash
 ./Scripts/build-app.sh 1.0.0
