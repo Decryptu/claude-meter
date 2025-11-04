@@ -93,14 +93,6 @@ To manually retrieve session details:
 
 ## Usage
 
-### Menu Bar Ring:
-
-| Color | Usage |
-|-------|-------|
-| ✅ Green | 0–49% |
-| 🟡 Yellow | 50–79% |
-| 🔴 Red | 80–100% |
-
 ### Dropdown Menu Includes:
 
 - Current usage + reset timer
