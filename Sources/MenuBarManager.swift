@@ -44,9 +44,40 @@ class MenuBarManager: NSObject {
                 await refreshUsage()
             }
         } else {
-            logger.log("No settings found, attempting auto-detection", level: .info)
-            // Try auto-detection on first run
+            logger.log("No settings found, showing auto-detection prompt", level: .info)
+            // Show prompt before attempting auto-detection
+            showAutoDetectionPrompt()
+        }
+    }
+
+    private func showAutoDetectionPrompt() {
+        let alert = NSAlert()
+        alert.messageText = "Welcome to ClaudeMeter"
+        alert.informativeText = """
+        ClaudeMeter can automatically detect your Claude credentials from:
+        • Claude Desktop app
+        • Brave Browser
+        • Google Chrome
+
+        This requires accessing your macOS Keychain to decrypt cookies.
+        You'll see a system prompt asking for permission.
+
+        Alternatively, you can configure credentials manually in Settings.
+        """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Try Auto-Detection")
+        alert.addButton(withTitle: "Configure Manually")
+
+        let response = alert.runModal()
+
+        if response == .alertFirstButtonReturn {
+            // User chose auto-detection
+            logger.log("User chose auto-detection", level: .info)
             tryAutoDetection()
+        } else {
+            // User chose manual configuration
+            logger.log("User chose manual configuration", level: .info)
+            updateMenu()  // Update menu to show setup options
         }
     }
 

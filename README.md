@@ -69,21 +69,26 @@ swift build -c release
 
 ### Automatic (Default)
 
-ClaudeMeter checks for an active session in:
+On first launch, ClaudeMeter shows a welcome dialog offering two options:
 
+**Try Auto-Detection** — Automatically detects your Claude session from:
 - Claude Desktop cookies
 - Brave Browser cookies
 - Chrome cookies
 
-If found, monitoring starts automatically.
+You'll be asked to grant Keychain access to decrypt cookies securely.
+
+**Configure Manually** — Skip auto-detection and enter credentials yourself.
+
+If auto-detection succeeds, monitoring starts automatically.
 
 ### Manual Setup
 
-If no session is detected:
+If you choose manual setup or auto-detection fails:
 
 1. Click the menu bar icon
 2. Open "Settings"
-3. Click "Auto-Detect" again or enter credentials manually
+3. Enter credentials manually
 
 To manually retrieve session details:
 
