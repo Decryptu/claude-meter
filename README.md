@@ -32,6 +32,7 @@
 git clone https://github.com/yourusername/claude-meter.git
 cd claude-meter
 ./run.sh
+```
 
 The app will auto-detect your Claude Desktop or browser session and begin monitoring.
 
@@ -46,16 +47,22 @@ Installation Options
 
 Option 1 — Quick Run
 
+```bash
 ./run.sh
+```
 
 Option 2 — Manual Build
 
+```bash
 swift build -c release
 ./.build/release/ClaudeMeter
+```
 
 Option 3 — Install to Applications
 
+```bash
 ./Scripts/install.sh
+```
 
 Configuration
 
@@ -107,22 +114,30 @@ Troubleshooting
 
 Logs are stored in:
 
+```bash
 ~/.config/claude-meter/logs/
+```
 
 Building for Distribution
 
+```bash
 ./Scripts/build-app.sh 1.0.0
+```
 
 Unsigned .app will be placed in dist/.
 
 Prepare a GitHub release:
 
+```bash
 ./Scripts/prepare-release.sh 1.0.0
+```
 
 Development
 
+```bash
 swift build
 swift build -c release
+```
 
 Key files:
 	•	CredentialExtractor.swift
