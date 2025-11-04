@@ -12,6 +12,13 @@ class MenuBarManager: NSObject {
     private var settingsWindowController: SettingsWindowController?
     private let logger = Logger.shared
 
+    // App version
+    private let appVersion = "1.0.1"
+
+    // Auto-detection retry tracking
+    private var lastAutoDetectionAttempt: Date?
+    private let autoDetectionCooldownSeconds: TimeInterval = 300 // 5 minutes
+
     init(statusItem: NSStatusItem, button: NSStatusBarButton) {
         self.statusItem = statusItem
         self.button = button
@@ -21,6 +28,7 @@ class MenuBarManager: NSObject {
         setupMenu()
         loadSettings()
         updateIcon(percentage: nil)
+        updateMenu()  // Initialize menu even without credentials
         startPeriodicRefresh()
     }
 
@@ -42,7 +50,10 @@ class MenuBarManager: NSObject {
         }
     }
 
-    private func tryAutoDetection() {
+    private func tryAutoDetection(isRetry: Bool = false) {
+        // Update last attempt timestamp
+        lastAutoDetectionAttempt = Date()
+
         Task {
             let extractor = CredentialExtractor()
             if let credentials = extractor.extractCredentials() {
@@ -64,7 +75,11 @@ class MenuBarManager: NSObject {
                                 await refreshUsage()
                             }
 
-                            showNotification(title: "ClaudeMeter Ready", message: "Credentials detected from \(credentials.source)")
+                            if isRetry {
+                                logger.log("Credentials refreshed automatically from \(credentials.source)", level: .info)
+                            } else {
+                                showNotification(title: "ClaudeMeter Ready", message: "Credentials detected from \(credentials.source)")
+                            }
                         } catch {
                             logger.log("Error saving auto-detected settings: \(error)", level: .error)
                         }
@@ -72,8 +87,27 @@ class MenuBarManager: NSObject {
                 }
             } else {
                 logger.log("Auto-detection failed, user needs to configure manually", level: .warning)
+                await MainActor.run {
+                    updateMenu()  // Update menu to show setup options
+                }
             }
         }
+    }
+
+    private func canRetryAutoDetection() -> Bool {
+        guard let lastAttempt = lastAutoDetectionAttempt else {
+            return true // Never tried, can retry
+        }
+
+        let timeSinceLastAttempt = Date().timeIntervalSince(lastAttempt)
+        let canRetry = timeSinceLastAttempt >= autoDetectionCooldownSeconds
+
+        if !canRetry {
+            let remainingTime = Int(autoDetectionCooldownSeconds - timeSinceLastAttempt)
+            logger.log("Auto-detection on cooldown. Retry available in \(remainingTime)s", level: .debug)
+        }
+
+        return canRetry
     }
 
     private func showNotification(title: String, message: String) {
@@ -121,6 +155,21 @@ class MenuBarManager: NSObject {
         } catch {
             logger.log("Error fetching usage: \(error)", level: .error)
             updateIcon(percentage: nil)
+
+            // Check if it's an authentication error and retry credential detection
+            if let apiError = error as? ClaudeAPIClient.APIError,
+               case .httpError(let statusCode) = apiError,
+               (statusCode == 401 || statusCode == 403) {
+
+                logger.log("Authentication error detected (HTTP \(statusCode)). Credentials may have expired.", level: .warning)
+
+                if canRetryAutoDetection() {
+                    logger.log("Attempting to refresh credentials automatically...", level: .info)
+                    tryAutoDetection(isRetry: true)
+                } else {
+                    logger.log("Cannot retry yet - cooldown period active", level: .debug)
+                }
+            }
         }
     }
 
@@ -189,9 +238,12 @@ class MenuBarManager: NSObject {
                 percentageItem.isEnabled = false
                 menu.addItem(percentageItem)
 
-                let resetItem = NSMenuItem(title: "Resets in: \(fiveHour.timeUntilReset)", action: nil, keyEquivalent: "")
-                resetItem.isEnabled = false
-                menu.addItem(resetItem)
+                // Only show reset time if it's available
+                if fiveHour.resetsAt != nil {
+                    let resetItem = NSMenuItem(title: "Resets in: \(fiveHour.timeUntilReset)", action: nil, keyEquivalent: "")
+                    resetItem.isEnabled = false
+                    menu.addItem(resetItem)
+                }
 
                 let lastUpdated = NSMenuItem(title: "Last updated: just now", action: nil, keyEquivalent: "")
                 lastUpdated.isEnabled = false
@@ -236,6 +288,10 @@ class MenuBarManager: NSObject {
         }
 
         menu.addItem(NSMenuItem.separator())
+
+        let versionItem = NSMenuItem(title: "Version \(appVersion)", action: nil, keyEquivalent: "")
+        versionItem.isEnabled = false
+        menu.addItem(versionItem)
 
         let quitItem = NSMenuItem(title: "Quit ClaudeMeter", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
