@@ -1,4 +1,3 @@
-```markdown
 <p align="center">
   <img width="64" height="64" alt="logo" src="https://github.com/user-attachments/assets/fd5bcb74-816c-4fc0-b284-096567a9f519" />
 </p>
@@ -166,4 +165,3 @@ MIT — see [LICENSE](LICENSE)
 Unofficial utility — not affiliated with Anthropic or Claude.
 
 Made with ❤️ for the Claude community.
-```
