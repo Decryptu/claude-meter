@@ -31,6 +31,7 @@ cd claude-meter
 ```
 
 That's it! ClaudeMeter will:
+
 1. Auto-detect credentials from Claude Desktop or your browser
 2. Build and launch the app
 3. Start monitoring your usage immediately
@@ -68,6 +69,7 @@ swift build -c release
 ```
 
 This will:
+
 - Build the release version
 - Copy to `~/Applications/ClaudeMeter/`
 - Optionally set up auto-start on login
@@ -83,6 +85,7 @@ ClaudeMeter automatically searches for credentials in:
 3. **Google Chrome** (`~/Library/Application Support/Google/Chrome/Default/Cookies`)
 
 On first run, it will:
+
 - Search these locations for your session data
 - Extract your Organization ID and Session Key
 - Save them automatically
@@ -95,6 +98,7 @@ If auto-detection succeeds, you'll see a notification confirming the source.
 If auto-detection fails, click the app icon and select **"Configure Settings..."**
 
 The modern SwiftUI settings window allows you to:
+
 1. **Auto-Detect**: Try automatic detection again
 2. **Manual Entry**: Enter credentials manually
 
@@ -110,6 +114,7 @@ The modern SwiftUI settings window allows you to:
    - **Session Key**: In Cookie header (starts with `sk-ant-sid01-`)
 
 Example:
+
 ```
 URL: https://claude.ai/api/organizations/[YOUR-ORG-ID]/usage
 Cookie: sessionKey=[YOUR-SESSION-KEY]; ...
@@ -120,6 +125,7 @@ Cookie: sessionKey=[YOUR-SESSION-KEY]; ...
 Once running, ClaudeMeter displays in your menu bar:
 
 ### Menu Bar Icon
+
 - **Ring indicator**: Fills clockwise based on usage percentage
 - **Percentage text**: Shows current usage (e.g., "47%")
 - **Color**: Changes from green → yellow → red as usage increases
@@ -129,6 +135,7 @@ Once running, ClaudeMeter displays in your menu bar:
 Click the icon to see:
 
 **When Configured:**
+
 - Current session usage percentage
 - Time until reset
 - Last update time
@@ -139,6 +146,7 @@ Click the icon to see:
 - **Quit ClaudeMeter** (`Cmd + Q`)
 
 **When Not Configured:**
+
 - Setup Required warning
 - Configure Settings option
 - View Logs option
@@ -146,6 +154,7 @@ Click the icon to see:
 ### Launch at Login
 
 Toggle directly from the menu to enable/disable auto-start. Uses native macOS APIs:
+
 - macOS 13+: `SMAppService`
 - macOS 12 and below: Launch Agent plist
 
@@ -154,6 +163,7 @@ Toggle directly from the menu to enable/disable auto-start. Uses native macOS AP
 ### View Logs
 
 Click **View Logs** from the menu to open the current log file. Logs include:
+
 - Credential detection attempts
 - API requests and responses
 - Errors and warnings
@@ -168,6 +178,7 @@ Logs are stored in: `~/.config/claude-meter/logs/`
 **Cause**: Auto-detection didn't find credentials
 
 **Solutions**:
+
 1. Make sure you're logged into Claude (Desktop or Web)
 2. Click "Configure Settings" → "Auto-Detect" to try again
 3. Check logs to see what was searched
@@ -180,11 +191,13 @@ Logs are stored in: `~/.config/claude-meter/logs/`
 #### No Data Showing After Configuration
 
 **Possible causes**:
+
 - Session key expired
 - Network issues
 - Incorrect organization ID
 
 **Solutions**:
+
 1. Check logs for API errors
 2. Verify you're logged into claude.ai
 3. Try refreshing credentials
@@ -195,6 +208,7 @@ Logs are stored in: `~/.config/claude-meter/logs/`
 **Cause**: macOS security restrictions
 
 **Solution**: Grant Full Disk Access:
+
 1. System Settings → Privacy & Security
 2. Full Disk Access
 3. Add Terminal (if running from terminal)
@@ -203,6 +217,7 @@ Logs are stored in: `~/.config/claude-meter/logs/`
 #### Launch at Login Not Working
 
 **Solutions**:
+
 1. Check System Settings → General → Login Items
 2. Remove and re-add via the app menu
 3. Check logs for error messages
@@ -251,6 +266,7 @@ swift build -c release
 ### Adding Features
 
 The codebase is well-structured:
+
 - **Logger.swift**: Add logging to any component via `Logger.shared.log()`
 - **CredentialExtractor.swift**: Add support for more browsers or storage formats
 - **SettingsView.swift**: Customize the settings UI
@@ -259,16 +275,19 @@ The codebase is well-structured:
 ## 🔒 Security & Privacy
 
 ### Local Storage Only
+
 - Credentials stored in `~/.config/claude-meter/settings.json`
 - File permissions restricted to your user account
 - Never transmitted to third parties
 
 ### Network Communication
+
 - Only communicates with `claude.ai` API endpoints
 - Uses standard HTTPS
 - No analytics or tracking
 
 ### Credential Extraction
+
 - Reads cookies from local browser/app databases
 - Creates temporary copies to avoid locks
 - No modification of original data
@@ -277,6 +296,7 @@ The codebase is well-structured:
 ### Session Key Expiration
 
 Claude session keys expire periodically. When this happens:
+
 1. ClaudeMeter will show errors in logs
 2. Use "Auto-Detect" to get fresh credentials
 3. Or manually update via Settings
