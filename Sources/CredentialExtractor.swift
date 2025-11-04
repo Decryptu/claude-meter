@@ -290,6 +290,9 @@ class CredentialExtractor {
         guard data.count > 3 else { return nil }
 
         let prefix = data.prefix(3)
+        logger.log("Encrypted data prefix: \(prefix.map { String(format: "%02x", $0) }.joined())", level: .debug)
+        logger.log("Total encrypted data length: \(data.count)", level: .debug)
+
         if prefix != Data([0x76, 0x31, 0x30]) { // "v10"
             logger.log("Unexpected encryption format", level: .warning)
             return nil
@@ -301,16 +304,21 @@ class CredentialExtractor {
             return nil
         }
 
+        logger.log("Encryption key length: \(key.count) bytes", level: .debug)
+        logger.log("Encryption key (hex): \(key.prefix(16).map { String(format: "%02x", $0) }.joined())...", level: .debug)
+
         // v10 format: "v10" (3 bytes) + nonce (12 bytes) + ciphertext + auth tag (16 bytes)
         let encryptedData = data.dropFirst(3) // Remove "v10" prefix
 
         guard encryptedData.count >= 28 else { // 12 (nonce) + 16 (tag) minimum
-            logger.log("Encrypted data too short", level: .error)
+            logger.log("Encrypted data too short: \(encryptedData.count) bytes", level: .error)
             return nil
         }
 
         let nonce = encryptedData.prefix(12)
         let ciphertext = encryptedData.dropFirst(12)
+
+        logger.log("Nonce length: \(nonce.count), Ciphertext+Tag length: \(ciphertext.count)", level: .debug)
 
         do {
             let symmetricKey = SymmetricKey(data: key)
@@ -318,11 +326,12 @@ class CredentialExtractor {
             let decryptedData = try AES.GCM.open(sealedBox, using: symmetricKey)
 
             if let decryptedString = String(data: decryptedData, encoding: .utf8) {
-                logger.log("Successfully decrypted cookie", level: .debug)
+                logger.log("Successfully decrypted cookie", level: .info)
                 return decryptedString
             }
         } catch {
             logger.log("Decryption failed: \(error.localizedDescription)", level: .error)
+            logger.log("This might indicate the key needs derivation or wrong data format", level: .warning)
         }
 
         return nil
