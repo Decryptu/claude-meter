@@ -222,11 +222,14 @@ class CredentialExtractor {
     }
 
     private func extractCookie(db: OpaquePointer?, name: String, domain: String, source: String) -> String? {
+        // Try direct query first to test if it's a binding issue
         let query = """
         SELECT value, encrypted_value FROM cookies
-        WHERE name = ? AND host_key LIKE ?
+        WHERE name = '\(name)' AND host_key LIKE '%claude.ai%'
         ORDER BY creation_utc DESC LIMIT 1
         """
+
+        logger.log("SQL Query: \(query)", level: .debug)
 
         var statement: OpaquePointer?
 
@@ -236,10 +239,6 @@ class CredentialExtractor {
         }
 
         defer { sqlite3_finalize(statement) }
-
-        // Bind parameters
-        sqlite3_bind_text(statement, 1, name, -1, nil)
-        sqlite3_bind_text(statement, 2, "%claude.ai%", -1, nil)
 
         logger.log("Executing query for cookie: \(name)", level: .debug)
         let stepResult = sqlite3_step(statement)
