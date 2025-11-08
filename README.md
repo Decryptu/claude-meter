@@ -5,7 +5,7 @@
 <h1 align="center">ClaudeMeter</h1>
 
 <p align="center">
-  A native macOS menu bar app that shows your <strong>Claude app usage</strong> in real-time — works with the Claude desktop app or claude.ai in your browser.
+  A native macOS menu bar app that shows your <strong>Claude app usage</strong> in real-time with <strong>Smart Quota Refresh</strong> to minimize wait times — works with the Claude desktop app or claude.ai in your browser.
   <br/><br/>
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform: macOS">
   <img src="https://img.shields.io/badge/swift-5.9+-orange" alt="Swift 5.9+">
