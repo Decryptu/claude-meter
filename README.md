@@ -128,69 +128,96 @@ This ensures you always have an active quota period ready to use, without wastin
 
 #### How It Works (Mathematical Proof)
 
-Claude's quota system operates on a **rolling 5-hour window**:
+Claude's quota system operates on a **rolling 5-hour window** that only starts when you send your first message. Understanding this mechanism is key to optimizing wait times.
+
+**The Core Problem:**
+
+When you hit your quota limit, you must wait for the 5-hour window to reset. The wait time depends on *when* the window started relative to when you hit the limit.
+
+**Real-World Scenario:**
 
 ```
 Without Smart Quota Refresh:
 ┌─────────────────────────────────────────────────────────────┐
-│ Hour 0: Send message → 5h window starts                     │
-│ Hour 1-4: Use Claude freely                                 │
-│ Hour 5: Window expires → enters "null state"                │
-│ Hour 6-23: No active window (quota unavailable)             │
-│ Hour 24: Send message → new 5h window starts                │
+│ 10:00 AM: Idle (no active window, "null state")            │
+│ 12:00 PM: You start using Claude → Window STARTS            │
+│ 2:00 PM:  You hit quota limit (used for 2 hours)           │
+│ 2:00 PM - 5:00 PM: WAITING (3 hours)                       │
+│ 5:00 PM:  Window resets (12:00 PM + 5h)                    │
 └─────────────────────────────────────────────────────────────┘
 
-Available windows per day: 24 ÷ 5 = 4.8 windows
-Usable hours: 4.8 × 5 = 24 hours
-
-BUT: Due to null state gaps, actual availability ≈ 60-70%
+Wait Time = 5h - 2h = 3 hours
 ```
 
 ```
 With Smart Quota Refresh:
 ┌─────────────────────────────────────────────────────────────┐
-│ Hour 0: Send message → 5h window starts                     │
-│ Hour 1-4: Use Claude freely                                 │
-│ Hour 5: Window expires → Auto-refresh triggers              │
-│         (~15 tokens spent) → New 5h window starts           │
-│ Hour 6-9: Use Claude freely                                 │
-│ Hour 10: Auto-refresh triggers again                        │
-│ ...pattern continues every 5 hours                          │
+│ 10:00 AM: Auto-refresh triggers → Window STARTS             │
+│           (~15 tokens spent)                                 │
+│ 12:00 PM: You start using Claude (window already 2h old)   │
+│ 2:00 PM:  You hit quota limit (used for 2 hours)           │
+│ 2:00 PM - 3:00 PM: WAITING (1 hour)                        │
+│ 3:00 PM:  Window resets (10:00 AM + 5h)                    │
 └─────────────────────────────────────────────────────────────┘
 
-Available windows per day: 24 ÷ 5 = 4.8 windows
-Usable hours: 24 hours (continuous coverage)
-
-Token cost per day: ~15 tokens × 4.8 = ~72 tokens
-Availability improvement: 60-70% → 100% (+30-40%)
+Wait Time = 5h - 2h - 2h = 1 hour
+Time Saved = 3h - 1h = 2 hours (66.7% reduction)
 ```
 
-**The Math:**
+**The Mathematical Formula:**
 
-- **Cost**: ~72 tokens/day for auto-refresh
-- **Benefit**: Eliminates null state gaps, ensuring quota is always ready
-- **ROI**: For a typical Claude Pro limit (e.g., 200K tokens/5h), spending 72 tokens/day is **0.036%** overhead
-- **Result**: Near-zero cost for 100% availability
+Let:
 
-**Real-World Example:**
+- `W` = Window duration (5 hours)
+- `L` = Time to hit quota limit after you start using Claude
+- `Δ` = Lead time (hours between auto-refresh and when you actually use Claude)
 
 ```
-Scenario: You use Claude at 9 AM and 6 PM daily
-
 Without Smart Refresh:
-- 9 AM: Start 5h window → expires at 2 PM
-- 2 PM - 6 PM: No active window (4 hours lost)
-- 6 PM: Manually start new window
-- Result: 4 hours of "dead time" daily
+  Wait Time = W - L
 
 With Smart Refresh:
-- 9 AM: Use Claude (window active until 2 PM)
-- 2 PM: Auto-refresh triggers (window active until 7 PM)
-- 6 PM: Use Claude (still within active window)
-- Result: Zero dead time, always ready
+  Wait Time = W - L - Δ
+
+Time Saved:
+  Savings = Δ
+  Percentage Reduction = (Δ / (W - L)) × 100%
 ```
 
-**Bottom Line:** Smart Quota Refresh costs ~0.036% of your daily quota but eliminates 30-40% of unusable time. It's mathematically optimal for users who don't use Claude continuously every 5 hours.
+**Example Calculation:**
+
+For W=5h, L=2h, Δ=2h:
+
+- **Without:** 5 - 2 = 3 hours wait
+- **With:** 5 - 2 - 2 = 1 hour wait
+- **Savings:** 2 hours (66.7% reduction)
+
+**Optimization Visualization:**
+
+<p align="center">
+  <img src="docs/claude_quota_optimization.png" alt="Smart Quota Refresh Optimization" />
+</p>
+
+*The graph shows how wait time decreases as the auto-start lead time (Δ) increases. Maximum optimization occurs when Δ = W - L, reducing wait time to zero.*
+
+**Key Insights:**
+
+1. **Cost:** ~15 tokens per auto-refresh trigger
+2. **Benefit:** Reduces wait time by up to 100% (when Δ = W - L)
+3. **ROI:** In the example above, spending 15 tokens saves 2 hours of waiting
+4. **Best Practice:** Enable Smart Quota Refresh if you use Claude sporadically rather than continuously
+
+**When It Helps Most:**
+
+- You use Claude in bursts (e.g., morning and evening sessions)
+- You frequently hit quota limits
+- You want to minimize downtime between sessions
+
+**When It's Less Useful:**
+
+- You use Claude continuously throughout the day
+- You rarely hit quota limits
+- Your usage patterns already align with 5-hour intervals
 
 ## Troubleshooting
 
