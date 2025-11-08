@@ -20,75 +20,60 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Claude Meter Settings")
-                .font(.title2)
-                .fontWeight(.bold)
-
+        VStack(spacing: 0) {
             if isAutoExtracting {
-                VStack(spacing: 10) {
+                VStack(spacing: 16) {
                     ProgressView()
-                        .scaleEffect(0.8)
+                        .controlSize(.large)
                     Text("Searching for credentials...")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
+                Form {
+                    Section {
+                        LabeledContent {
+                            TextField("6e35a193-deaa-46a0-80bd-f7a1652d383f", text: $organizationId)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(.body, design: .monospaced))
+                        } label: {
+                            HStack {
+                                Text("Organization ID")
+                                Button(action: { showHelpAlert = true }) {
+                                    Image(systemName: "questionmark.circle")
+                                }
+                                .buttonStyle(.plain)
+                                .help("How to get credentials manually")
+                            }
+                        }
+
+                        LabeledContent("Session Key") {
+                            SecureField("sk-ant-sid01-...", text: $sessionKey)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(.body, design: .monospaced))
+                        }
+
+                        if let result = extractionResult {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                Text(result)
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    } header: {
                         Text("Credentials")
-                            .font(.headline)
-
-                        Button(action: {
-                            showHelpAlert = true
-                        }) {
-                            Image(systemName: "questionmark.circle")
-                                .foregroundColor(.blue)
-                        }
-                        .buttonStyle(.plain)
-                        .help("How to get credentials manually")
-
-                        Spacer()
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Organization ID")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        TextField("6e35a193-deaa-46a0-80bd-f7a1652d383f", text: $organizationId)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Session Key")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        SecureField("sk-ant-sid01-...", text: $sessionKey)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
-                    }
-
-                    if let result = extractionResult {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text(result)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(8)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(8)
+                    } footer: {
+                        Text("Required to monitor your Claude usage")
+                            .font(.caption)
                     }
                 }
-                .padding()
+                .formStyle(.grouped)
+                .scrollDisabled(true)
 
-                Divider()
-
+                // Bottom action bar
                 HStack(spacing: 12) {
                     Button("Auto-Detect") {
                         autoDetectCredentials()
@@ -110,9 +95,10 @@ struct SettingsView: View {
                     .disabled(organizationId.isEmpty || sessionKey.isEmpty)
                 }
                 .padding()
+                .background(.regularMaterial)
             }
         }
-        .frame(width: 500, height: 300)
+        .frame(width: 540, height: 340)
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -209,15 +195,17 @@ struct SettingsView: View {
 class SettingsWindowController: NSWindowController {
     convenience init(currentSettings: ClaudeSettings?, onSave: @escaping (ClaudeSettings) -> Void) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 340),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
 
         window.title = "Settings"
+        window.titlebarAppearsTransparent = true
         window.center()
         window.isReleasedWhenClosed = false
+        window.isMovableByWindowBackground = true
 
         let settingsView = SettingsView(currentSettings: currentSettings, onSave: onSave)
         window.contentView = NSHostingView(rootView: settingsView)
