@@ -71,7 +71,7 @@ class ClaudeAPIClient {
             "uuid": conversationUUID,
             "name": "",
             "include_conversation_preferences": true,
-            "is_temporary": false
+            "is_temporary": true
         ]
 
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
@@ -105,7 +105,7 @@ class ClaudeAPIClient {
             throw APIError.invalidURL
         }
 
-        logger.log("Sending minimal message to conversation: \(conversationId)", level: .debug)
+        logger.log("Sending minimal message (private/temporary conversation) to: \(conversationId)", level: .debug)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -116,7 +116,7 @@ class ClaudeAPIClient {
 
         let timezone = TimeZone.current.identifier
         let payload: [String: Any] = [
-            "prompt": "hi",
+            "prompt": "1+1=?",
             "parent_message_uuid": "00000000-0000-4000-8000-000000000000",
             "timezone": timezone,
             "rendering_mode": "messages"
