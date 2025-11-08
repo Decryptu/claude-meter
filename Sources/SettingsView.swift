@@ -95,12 +95,13 @@ struct SettingsView: View {
                     Text("Quota Optimization")
                         .font(.headline)
 
-                    Toggle("Auto-trigger quota period", isOn: $autoTriggerQuota)
-                        .help("Automatically start a new 5-hour quota period when inactive")
+                    Toggle("Smart Quota Refresh", isOn: $autoTriggerQuota)
+                        .help("Keeps your 5-hour quota window active by automatically sending a minimal message (~10-20 tokens) when it expires. This ensures you always have an active quota period ready to use.")
 
-                    Text("When enabled, automatically sends a minimal message (~10-20 tokens) to start a new quota period when the current one expires.")
+                    Text("Maintains an active quota window by sending a minimal message when your 5-hour period expires. Uses only ~10-20 tokens per refresh. Runs silently in the background.")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding()
 

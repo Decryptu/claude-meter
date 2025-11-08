@@ -223,31 +223,13 @@ class MenuBarManager: NSObject {
             return
         }
 
-        logger.log("Triggering new quota period", level: .info)
+        logger.log("Smart quota refresh: Triggering new quota period", level: .info)
 
         do {
             let resetsAt = try await apiClient.triggerQuotaPeriod()
-            logger.log("New quota period started, resets at: \(resetsAt)", level: .info)
-
-            // Show notification
-            showNotification(
-                title: "Quota Period Started",
-                message: "New 5-hour quota period activated (used ~10-20 tokens)"
-            )
+            logger.log("Smart quota refresh: New quota period started, resets at: \(resetsAt)", level: .info)
         } catch {
-            logger.log("Error triggering quota period: \(error)", level: .error)
-            showNotification(
-                title: "Error",
-                message: "Failed to trigger quota period: \(error.localizedDescription)"
-            )
-        }
-    }
-
-    @objc private func manuallyTriggerQuota() {
-        logger.log("Manual quota trigger requested", level: .info)
-        Task { @MainActor in
-            await triggerQuotaPeriod()
-            await refreshUsage()
+            logger.log("Smart quota refresh: Error triggering quota period: \(error)", level: .error)
         }
     }
 
@@ -333,11 +315,6 @@ class MenuBarManager: NSObject {
             let refreshItem = NSMenuItem(title: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r")
             refreshItem.target = self
             menu.addItem(refreshItem)
-
-            // Manual trigger quota period button (only show if in null state or always available)
-            let triggerQuotaItem = NSMenuItem(title: "Start New Quota Period", action: #selector(manuallyTriggerQuota), keyEquivalent: "")
-            triggerQuotaItem.target = self
-            menu.addItem(triggerQuotaItem)
 
             // Launch at login toggle
             let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")

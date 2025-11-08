@@ -20,8 +20,9 @@
 ## Features
 
 - **Automatic Setup** — Detects your Claude Desktop or browser session
-- **Menu Bar Integration** — Ring indicator
+- **Menu Bar Integration** — Ring indicator with real-time usage
 - **Real-Time Updates** — Refreshes every 60 seconds
+- **Smart Quota Refresh** — Keep your 5-hour quota window active automatically
 - **Launch at Login** — Toggle from the menu
 - **Modern UI** — SwiftUI, native macOS 13-26 interface
 - **Built-in Logs** — Debug directly from the menu
@@ -109,6 +110,19 @@ To manually retrieve session details:
 - Settings (Cmd+,)
 - Logs
 - Quit (Cmd+Q)
+
+### Smart Quota Refresh
+
+Claude's quota works on a rolling 5-hour window that starts when you send your first message. If you don't use Claude for 5+ hours, the window expires and goes into a "null state."
+
+**Smart Quota Refresh** automatically keeps your quota window active by:
+- Detecting when your quota period expires
+- Sending a minimal message (~10-20 tokens) to start a new 5-hour window
+- Running silently in the background
+
+Enable it in **Settings** → **Smart Quota Refresh** toggle.
+
+This ensures you always have an active quota period ready to use, without wasting tokens on manual messages.
 
 ## Troubleshooting
 
