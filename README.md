@@ -119,12 +119,12 @@ Claude's quota works on a rolling 5-hour window that starts when you send your f
 **Smart Quota Refresh** automatically keeps your quota window active by:
 
 - Detecting when your quota period expires
-- Sending a minimal message (~10-20 tokens) to start a new 5-hour window
+- Sending a minimal message (~2-5 tokens) in a private conversation that doesn't clutter your history
 - Running silently in the background
 
 Enable it in **Settings** → **Smart Quota Refresh** toggle.
 
-This ensures you always have an active quota period ready to use, without wasting tokens on manual messages.
+This ensures you always have an active quota period ready to use, without wasting tokens or leaving traces in your chat history.
 
 #### How It Works (Mathematical Proof)
 
@@ -153,7 +153,7 @@ Wait Time = 5h - 2h = 3 hours
 With Smart Quota Refresh:
 ┌─────────────────────────────────────────────────────────────┐
 │ 10:00 AM: Auto-refresh triggers → Window STARTS             │
-│           (~15 tokens spent)                                 │
+│           (~2-5 tokens spent in private conversation)        │
 │ 12:00 PM: You start using Claude (window already 2h old)   │
 │ 2:00 PM:  You hit quota limit (used for 2 hours)           │
 │ 2:00 PM - 3:00 PM: WAITING (1 hour)                        │
@@ -202,10 +202,11 @@ For W=5h, L=2h, Δ=2h:
 
 **Key Insights:**
 
-1. **Cost:** ~15 tokens per auto-refresh trigger
+1. **Cost:** ~2-5 tokens per auto-refresh trigger (using minimal prompt in private conversation)
 2. **Benefit:** Reduces wait time by up to 100% (when Δ = W - L)
-3. **ROI:** In the example above, spending 15 tokens saves 2 hours of waiting
-4. **Best Practice:** Enable Smart Quota Refresh if you use Claude sporadically rather than continuously
+3. **ROI:** In the example above, spending ~2-5 tokens saves 2 hours of waiting
+4. **Privacy:** Uses temporary conversations that don't appear in your chat history
+5. **Best Practice:** Enable Smart Quota Refresh if you use Claude sporadically rather than continuously
 
 **When It Helps Most:**
 
