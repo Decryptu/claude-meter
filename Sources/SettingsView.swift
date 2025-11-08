@@ -184,7 +184,7 @@ struct SettingsView: View {
 
     private func saveSettings() {
         // Preserve autoTriggerQuota setting when saving credentials
-        let currentAutoTrigger = (try? ClaudeSettings.load())?.autoTriggerQuota ?? false
+        let currentAutoTrigger = ClaudeSettings.load()?.autoTriggerQuota ?? false
 
         let settings = ClaudeSettings(
             organizationId: organizationId.trimmingCharacters(in: .whitespacesAndNewlines),
