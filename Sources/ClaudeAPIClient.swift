@@ -116,7 +116,7 @@ class ClaudeAPIClient {
 
         let timezone = TimeZone.current.identifier
         let payload: [String: Any] = [
-            "prompt": "1",
+            "prompt": "1+1=?",
             "parent_message_uuid": "00000000-0000-4000-8000-000000000000",
             "timezone": timezone,
             "rendering_mode": "messages"
