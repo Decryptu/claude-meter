@@ -30,15 +30,14 @@ struct SettingsView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Form {
-                    Section {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Credentials section
+                    VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Organization ID")
-                                .frame(width: 120, alignment: .trailing)
+                            Text("Credentials")
+                                .font(.headline)
 
-                            TextField("6e35a193-deaa-46a0-80bd-f7a1652d383f", text: $organizationId)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(.body, design: .monospaced))
+                            Spacer()
 
                             Button(action: { showHelpAlert = true }) {
                                 Image(systemName: "questionmark.circle")
@@ -47,9 +46,28 @@ struct SettingsView: View {
                             .help("How to get credentials manually")
                         }
 
-                        HStack {
+                        Text("Required to monitor your Claude usage")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Divider()
+
+                        // Organization ID
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Organization ID")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            TextField("6e35a193-deaa-46a0-80bd-f7a1652d383f", text: $organizationId)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(.body, design: .monospaced))
+                        }
+
+                        // Session Key
+                        VStack(alignment: .leading, spacing: 6) {
                             Text("Session Key")
-                                .frame(width: 120, alignment: .trailing)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
 
                             SecureField("sk-ant-sid01-...", text: $sessionKey)
                                 .textFieldStyle(.roundedBorder)
@@ -64,17 +82,15 @@ struct SettingsView: View {
                                     .font(.callout)
                                     .foregroundStyle(.secondary)
                             }
-                            .padding(.vertical, 4)
+                            .padding(.top, 4)
                         }
-                    } header: {
-                        Text("Credentials")
-                    } footer: {
-                        Text("Required to monitor your Claude usage")
-                            .font(.caption)
                     }
+                    .padding()
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+
+                    Spacer()
                 }
-                .formStyle(.grouped)
-                .scrollDisabled(true)
+                .padding()
 
                 // Bottom action bar
                 HStack(spacing: 12) {
