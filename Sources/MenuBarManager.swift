@@ -13,7 +13,7 @@ class MenuBarManager: NSObject {
     private let logger = Logger.shared
 
     // App version
-    private let appVersion = "1.2.0"
+    private let appVersion = "1.2.1"
 
     // Auto-detection retry tracking
     private var lastAutoDetectionAttempt: Date?
