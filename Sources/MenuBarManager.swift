@@ -13,7 +13,7 @@ class MenuBarManager: NSObject {
     private let logger = Logger.shared
 
     // App version
-    private let appVersion = "1.1.0"
+    private let appVersion = "1.2.0"
 
     // Auto-detection retry tracking
     private var lastAutoDetectionAttempt: Date?
@@ -94,7 +94,8 @@ class MenuBarManager: NSObject {
                     if let orgId = credentials.organizationId, let sessionKey = credentials.sessionKey {
                         let newSettings = ClaudeSettings(
                             organizationId: orgId,
-                            sessionKey: sessionKey
+                            sessionKey: sessionKey,
+                            autoTriggerQuota: false
                         )
 
                         do {
@@ -177,6 +178,17 @@ class MenuBarManager: NSObject {
 
         do {
             usageData = try await apiClient.fetchUsage()
+
+            // Check for null state (quota period expired) and auto-trigger if enabled
+            if let settings = settings, settings.autoTriggerQuota {
+                if let fiveHour = usageData?.fiveHour, fiveHour.resetsAt == nil {
+                    logger.log("Detected null quota state with auto-trigger enabled", level: .info)
+                    await triggerQuotaPeriod()
+                    // Refresh usage data after triggering
+                    usageData = try await apiClient.fetchUsage()
+                }
+            }
+
             updateMenu()
 
             if let percentage = usageData?.fiveHour?.utilization {
@@ -201,6 +213,23 @@ class MenuBarManager: NSObject {
                     logger.log("Cannot retry yet - cooldown period active", level: .debug)
                 }
             }
+        }
+    }
+
+    @MainActor
+    private func triggerQuotaPeriod() async {
+        guard let apiClient = apiClient else {
+            logger.log("Cannot trigger quota: No API client configured", level: .error)
+            return
+        }
+
+        logger.log("Smart quota refresh: Triggering new quota period", level: .info)
+
+        do {
+            let resetsAt = try await apiClient.triggerQuotaPeriod()
+            logger.log("Smart quota refresh: New quota period started, resets at: \(resetsAt)", level: .info)
+        } catch {
+            logger.log("Smart quota refresh: Error triggering quota period: \(error)", level: .error)
         }
     }
 
@@ -287,6 +316,21 @@ class MenuBarManager: NSObject {
             refreshItem.target = self
             menu.addItem(refreshItem)
 
+            menu.addItem(NSMenuItem.separator())
+
+            // Smart Quota Refresh toggle
+            let smartQuotaItem = NSMenuItem(title: "Smart Quota Refresh", action: #selector(toggleSmartQuota), keyEquivalent: "")
+            smartQuotaItem.target = self
+            smartQuotaItem.state = settings?.autoTriggerQuota == true ? .on : .off
+            menu.addItem(smartQuotaItem)
+
+            // Info text below toggle
+            let infoItem = NSMenuItem(title: "   Keeps your quota window active", action: nil, keyEquivalent: "")
+            infoItem.isEnabled = false
+            menu.addItem(infoItem)
+
+            menu.addItem(NSMenuItem.separator())
+
             // Launch at login toggle
             let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
             launchAtLoginItem.target = self
@@ -333,6 +377,43 @@ class MenuBarManager: NSObject {
         logger.log("Manual refresh triggered", level: .info)
         Task { @MainActor in
             await refreshUsage()
+        }
+    }
+
+    @objc private func toggleSmartQuota() {
+        guard var currentSettings = settings else {
+            logger.log("Cannot toggle smart quota: No settings configured", level: .error)
+            return
+        }
+
+        // Toggle the setting
+        currentSettings.autoTriggerQuota.toggle()
+
+        // Save to disk
+        do {
+            try currentSettings.save()
+            settings = currentSettings
+            logger.log("Smart Quota Refresh toggled: \(currentSettings.autoTriggerQuota)", level: .info)
+            updateMenu()
+
+            // Show brief explanation on first enable
+            if currentSettings.autoTriggerQuota {
+                Task { @MainActor in
+                    // Check if quota is currently in null state and trigger immediately
+                    if let fiveHour = usageData?.fiveHour, fiveHour.resetsAt == nil {
+                        logger.log("Quota in null state, triggering immediately", level: .info)
+                        await triggerQuotaPeriod()
+                        await refreshUsage()
+                    }
+                }
+            }
+        } catch {
+            logger.log("Error saving smart quota setting: \(error)", level: .error)
+            let alert = NSAlert()
+            alert.messageText = "Error"
+            alert.informativeText = "Could not save setting: \(error.localizedDescription)"
+            alert.alertStyle = .warning
+            alert.runModal()
         }
     }
 

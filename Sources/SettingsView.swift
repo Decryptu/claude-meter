@@ -20,75 +20,79 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Claude Meter Settings")
-                .font(.title2)
-                .fontWeight(.bold)
-
+        VStack(spacing: 0) {
             if isAutoExtracting {
-                VStack(spacing: 10) {
+                VStack(spacing: 16) {
                     ProgressView()
-                        .scaleEffect(0.8)
+                        .controlSize(.large)
                     Text("Searching for credentials...")
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Text("Credentials")
-                            .font(.headline)
-
-                        Button(action: {
-                            showHelpAlert = true
-                        }) {
-                            Image(systemName: "questionmark.circle")
-                                .foregroundColor(.blue)
-                        }
-                        .buttonStyle(.plain)
-                        .help("How to get credentials manually")
-
-                        Spacer()
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Organization ID")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        TextField("6e35a193-deaa-46a0-80bd-f7a1652d383f", text: $organizationId)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Session Key")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        SecureField("sk-ant-sid01-...", text: $sessionKey)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
-                    }
-
-                    if let result = extractionResult {
+                VStack(alignment: .leading, spacing: 20) {
+                    // Credentials section
+                    VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text(result)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            Text("Credentials")
+                                .font(.headline)
+
+                            Spacer()
+
+                            Button(action: { showHelpAlert = true }) {
+                                Image(systemName: "questionmark.circle")
+                            }
+                            .buttonStyle(.plain)
+                            .help("How to get credentials manually")
                         }
-                        .padding(8)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(8)
+
+                        Text("Required to monitor your Claude usage")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Divider()
+
+                        // Organization ID
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Organization ID")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            TextField("6e35a193-deaa-46a0-80bd-f7a1652d383f", text: $organizationId)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(.body, design: .monospaced))
+                        }
+
+                        // Session Key
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Session Key")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            SecureField("sk-ant-sid01-...", text: $sessionKey)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(.body, design: .monospaced))
+                        }
+
+                        if let result = extractionResult {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                Text(result)
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.top, 4)
+                        }
                     }
+                    .padding()
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+
+                    Spacer()
                 }
                 .padding()
 
-                Divider()
-
+                // Bottom action bar
                 HStack(spacing: 12) {
                     Button("Auto-Detect") {
                         autoDetectCredentials()
@@ -110,9 +114,10 @@ struct SettingsView: View {
                     .disabled(organizationId.isEmpty || sessionKey.isEmpty)
                 }
                 .padding()
+                .background(.regularMaterial)
             }
         }
-        .frame(width: 500, height: 300)
+        .frame(width: 540, height: 340)
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -183,9 +188,13 @@ struct SettingsView: View {
     }
 
     private func saveSettings() {
+        // Preserve autoTriggerQuota setting when saving credentials
+        let currentAutoTrigger = ClaudeSettings.load()?.autoTriggerQuota ?? false
+
         let settings = ClaudeSettings(
             organizationId: organizationId.trimmingCharacters(in: .whitespacesAndNewlines),
-            sessionKey: sessionKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            sessionKey: sessionKey.trimmingCharacters(in: .whitespacesAndNewlines),
+            autoTriggerQuota: currentAutoTrigger
         )
 
         do {
@@ -205,15 +214,17 @@ struct SettingsView: View {
 class SettingsWindowController: NSWindowController {
     convenience init(currentSettings: ClaudeSettings?, onSave: @escaping (ClaudeSettings) -> Void) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 340),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
 
         window.title = "Settings"
+        window.titlebarAppearsTransparent = true
         window.center()
         window.isReleasedWhenClosed = false
+        window.isMovableByWindowBackground = true
 
         let settingsView = SettingsView(currentSettings: currentSettings, onSave: onSave)
         window.contentView = NSHostingView(rootView: settingsView)

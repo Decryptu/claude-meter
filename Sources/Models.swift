@@ -55,6 +55,7 @@ struct UsagePeriod: Codable {
 struct ClaudeSettings: Codable {
     var organizationId: String
     var sessionKey: String
+    var autoTriggerQuota: Bool
 
     static let settingsURL: URL = {
         let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
@@ -63,13 +64,75 @@ struct ClaudeSettings: Codable {
         return configDirectory.appendingPathComponent("settings.json")
     }()
 
+    init(organizationId: String, sessionKey: String, autoTriggerQuota: Bool = false) {
+        self.organizationId = organizationId
+        self.sessionKey = sessionKey
+        self.autoTriggerQuota = autoTriggerQuota
+    }
+
     static func load() -> ClaudeSettings? {
         guard let data = try? Data(contentsOf: settingsURL) else { return nil }
-        return try? JSONDecoder().decode(ClaudeSettings.self, from: data)
+
+        // Handle legacy settings without autoTriggerQuota field
+        if let settings = try? JSONDecoder().decode(ClaudeSettings.self, from: data) {
+            return settings
+        }
+
+        // Try to decode without the new field
+        struct LegacySettings: Codable {
+            var organizationId: String
+            var sessionKey: String
+        }
+
+        if let legacy = try? JSONDecoder().decode(LegacySettings.self, from: data) {
+            return ClaudeSettings(organizationId: legacy.organizationId, sessionKey: legacy.sessionKey)
+        }
+
+        return nil
     }
 
     func save() throws {
         let data = try JSONEncoder().encode(self)
         try data.write(to: Self.settingsURL)
+    }
+}
+
+// MARK: - Quota Period Trigger Models
+
+struct ConversationResponse: Codable {
+    let uuid: String
+    let name: String
+}
+
+struct MessageLimitEvent: Codable {
+    let type: String
+    let messageLimit: MessageLimit
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case messageLimit = "message_limit"
+    }
+}
+
+struct MessageLimit: Codable {
+    let type: String
+    let windows: Windows
+}
+
+struct Windows: Codable {
+    let fiveHour: WindowDetail
+
+    enum CodingKeys: String, CodingKey {
+        case fiveHour = "5h"
+    }
+}
+
+struct WindowDetail: Codable {
+    let status: String
+    let resetsAt: Int
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case resetsAt = "resets_at"
     }
 }
