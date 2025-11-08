@@ -325,7 +325,7 @@ class MenuBarManager: NSObject {
             menu.addItem(smartQuotaItem)
 
             // Info text below toggle
-            let infoItem = NSMenuItem(title: "   Auto-renews 5hr quota (~10-20 tokens)", action: nil, keyEquivalent: "")
+            let infoItem = NSMenuItem(title: "   Keeps your quota window active", action: nil, keyEquivalent: "")
             infoItem.isEnabled = false
             menu.addItem(infoItem)
 
