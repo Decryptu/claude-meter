@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/swift-5.9+-orange" alt="Swift 5.9+">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT">
   <br/><br/>
-  <img width="393" height="333" alt="Screenshot" src="https://github.com/user-attachments/assets/e4fb1e3a-1784-4634-a453-8c0091a4ebb6" />
+  <img width="866" height="541" alt="Screenshot" src="https://github.com/user-attachments/assets/598d12c5-2ff9-4c98-920b-b7ab65cc5120" />
 </p>
 
 > ✅ **No API keys required** — ClaudeMeter reads usage from your Claude account session (desktop or browser).  
@@ -195,7 +195,7 @@ For W=5h, L=2h, Δ=2h:
 **Optimization Visualization:**
 
 <p align="center">
-  <img src="docs/claude_quota_optimization.png" alt="Smart Quota Refresh Optimization" />
+  <img width="4170" height="2973" alt="claude_quota_optimization" src="https://github.com/user-attachments/assets/cd911223-42c7-44a6-801c-5c935d8c8391" />
 </p>
 
 *The graph shows how wait time decreases as the auto-start lead time (Δ) increases. Maximum optimization occurs when Δ = W - L, reducing wait time to zero.*
