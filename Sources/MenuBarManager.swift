@@ -316,6 +316,21 @@ class MenuBarManager: NSObject {
             refreshItem.target = self
             menu.addItem(refreshItem)
 
+            menu.addItem(NSMenuItem.separator())
+
+            // Smart Quota Refresh toggle
+            let smartQuotaItem = NSMenuItem(title: "Smart Quota Refresh", action: #selector(toggleSmartQuota), keyEquivalent: "")
+            smartQuotaItem.target = self
+            smartQuotaItem.state = settings?.autoTriggerQuota == true ? .on : .off
+            menu.addItem(smartQuotaItem)
+
+            // Info text below toggle
+            let infoItem = NSMenuItem(title: "   Auto-renews 5hr quota (~10-20 tokens)", action: nil, keyEquivalent: "")
+            infoItem.isEnabled = false
+            menu.addItem(infoItem)
+
+            menu.addItem(NSMenuItem.separator())
+
             // Launch at login toggle
             let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
             launchAtLoginItem.target = self
@@ -362,6 +377,43 @@ class MenuBarManager: NSObject {
         logger.log("Manual refresh triggered", level: .info)
         Task { @MainActor in
             await refreshUsage()
+        }
+    }
+
+    @objc private func toggleSmartQuota() {
+        guard var currentSettings = settings else {
+            logger.log("Cannot toggle smart quota: No settings configured", level: .error)
+            return
+        }
+
+        // Toggle the setting
+        currentSettings.autoTriggerQuota.toggle()
+
+        // Save to disk
+        do {
+            try currentSettings.save()
+            settings = currentSettings
+            logger.log("Smart Quota Refresh toggled: \(currentSettings.autoTriggerQuota)", level: .info)
+            updateMenu()
+
+            // Show brief explanation on first enable
+            if currentSettings.autoTriggerQuota {
+                Task { @MainActor in
+                    // Check if quota is currently in null state and trigger immediately
+                    if let fiveHour = usageData?.fiveHour, fiveHour.resetsAt == nil {
+                        logger.log("Quota in null state, triggering immediately", level: .info)
+                        await triggerQuotaPeriod()
+                        await refreshUsage()
+                    }
+                }
+            }
+        } catch {
+            logger.log("Error saving smart quota setting: \(error)", level: .error)
+            let alert = NSAlert()
+            alert.messageText = "Error"
+            alert.informativeText = "Could not save setting: \(error.localizedDescription)"
+            alert.alertStyle = .warning
+            alert.runModal()
         }
     }
 

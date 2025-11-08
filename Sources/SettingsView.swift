@@ -5,7 +5,6 @@ struct SettingsView: View {
 
     @State private var organizationId: String
     @State private var sessionKey: String
-    @State private var autoTriggerQuota: Bool
     @State private var isAutoExtracting = false
     @State private var extractionResult: String?
     @State private var showError = false
@@ -17,7 +16,6 @@ struct SettingsView: View {
     init(currentSettings: ClaudeSettings?, onSave: @escaping (ClaudeSettings) -> Void) {
         _organizationId = State(initialValue: currentSettings?.organizationId ?? "")
         _sessionKey = State(initialValue: currentSettings?.sessionKey ?? "")
-        _autoTriggerQuota = State(initialValue: currentSettings?.autoTriggerQuota ?? false)
         self.onSave = onSave
     }
 
@@ -91,22 +89,6 @@ struct SettingsView: View {
 
                 Divider()
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Quota Optimization")
-                        .font(.headline)
-
-                    Toggle("Smart Quota Refresh", isOn: $autoTriggerQuota)
-                        .help("Keeps your 5-hour quota window active by automatically sending a minimal message (~10-20 tokens) when it expires. This ensures you always have an active quota period ready to use.")
-
-                    Text("Maintains an active quota window by sending a minimal message when your 5-hour period expires. Uses only ~10-20 tokens per refresh. Runs silently in the background.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding()
-
-                Divider()
-
                 HStack(spacing: 12) {
                     Button("Auto-Detect") {
                         autoDetectCredentials()
@@ -130,7 +112,7 @@ struct SettingsView: View {
                 .padding()
             }
         }
-        .frame(width: 500, height: 380)
+        .frame(width: 500, height: 300)
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -201,15 +183,18 @@ struct SettingsView: View {
     }
 
     private func saveSettings() {
+        // Preserve autoTriggerQuota setting when saving credentials
+        let currentAutoTrigger = (try? ClaudeSettings.load())?.autoTriggerQuota ?? false
+
         let settings = ClaudeSettings(
             organizationId: organizationId.trimmingCharacters(in: .whitespacesAndNewlines),
             sessionKey: sessionKey.trimmingCharacters(in: .whitespacesAndNewlines),
-            autoTriggerQuota: autoTriggerQuota
+            autoTriggerQuota: currentAutoTrigger
         )
 
         do {
             try settings.save()
-            Logger.shared.log("Settings saved successfully (auto-trigger: \(autoTriggerQuota))", level: .info)
+            Logger.shared.log("Settings saved successfully", level: .info)
             onSave(settings)
             dismiss()
         } catch {
@@ -224,7 +209,7 @@ struct SettingsView: View {
 class SettingsWindowController: NSWindowController {
     convenience init(currentSettings: ClaudeSettings?, onSave: @escaping (ClaudeSettings) -> Void) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 380),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
