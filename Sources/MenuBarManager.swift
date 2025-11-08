@@ -94,7 +94,8 @@ class MenuBarManager: NSObject {
                     if let orgId = credentials.organizationId, let sessionKey = credentials.sessionKey {
                         let newSettings = ClaudeSettings(
                             organizationId: orgId,
-                            sessionKey: sessionKey
+                            sessionKey: sessionKey,
+                            autoTriggerQuota: false
                         )
 
                         do {
@@ -177,6 +178,17 @@ class MenuBarManager: NSObject {
 
         do {
             usageData = try await apiClient.fetchUsage()
+
+            // Check for null state (quota period expired) and auto-trigger if enabled
+            if let settings = settings, settings.autoTriggerQuota {
+                if let fiveHour = usageData?.fiveHour, fiveHour.resetsAt == nil {
+                    logger.log("Detected null quota state with auto-trigger enabled", level: .info)
+                    await triggerQuotaPeriod()
+                    // Refresh usage data after triggering
+                    usageData = try await apiClient.fetchUsage()
+                }
+            }
+
             updateMenu()
 
             if let percentage = usageData?.fiveHour?.utilization {
@@ -201,6 +213,41 @@ class MenuBarManager: NSObject {
                     logger.log("Cannot retry yet - cooldown period active", level: .debug)
                 }
             }
+        }
+    }
+
+    @MainActor
+    private func triggerQuotaPeriod() async {
+        guard let apiClient = apiClient else {
+            logger.log("Cannot trigger quota: No API client configured", level: .error)
+            return
+        }
+
+        logger.log("Triggering new quota period", level: .info)
+
+        do {
+            let resetsAt = try await apiClient.triggerQuotaPeriod()
+            logger.log("New quota period started, resets at: \(resetsAt)", level: .info)
+
+            // Show notification
+            showNotification(
+                title: "Quota Period Started",
+                message: "New 5-hour quota period activated (used ~10-20 tokens)"
+            )
+        } catch {
+            logger.log("Error triggering quota period: \(error)", level: .error)
+            showNotification(
+                title: "Error",
+                message: "Failed to trigger quota period: \(error.localizedDescription)"
+            )
+        }
+    }
+
+    @objc private func manuallyTriggerQuota() {
+        logger.log("Manual quota trigger requested", level: .info)
+        Task { @MainActor in
+            await triggerQuotaPeriod()
+            await refreshUsage()
         }
     }
 
@@ -286,6 +333,11 @@ class MenuBarManager: NSObject {
             let refreshItem = NSMenuItem(title: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r")
             refreshItem.target = self
             menu.addItem(refreshItem)
+
+            // Manual trigger quota period button (only show if in null state or always available)
+            let triggerQuotaItem = NSMenuItem(title: "Start New Quota Period", action: #selector(manuallyTriggerQuota), keyEquivalent: "")
+            triggerQuotaItem.target = self
+            menu.addItem(triggerQuotaItem)
 
             // Launch at login toggle
             let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")

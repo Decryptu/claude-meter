@@ -5,6 +5,7 @@ struct SettingsView: View {
 
     @State private var organizationId: String
     @State private var sessionKey: String
+    @State private var autoTriggerQuota: Bool
     @State private var isAutoExtracting = false
     @State private var extractionResult: String?
     @State private var showError = false
@@ -16,6 +17,7 @@ struct SettingsView: View {
     init(currentSettings: ClaudeSettings?, onSave: @escaping (ClaudeSettings) -> Void) {
         _organizationId = State(initialValue: currentSettings?.organizationId ?? "")
         _sessionKey = State(initialValue: currentSettings?.sessionKey ?? "")
+        _autoTriggerQuota = State(initialValue: currentSettings?.autoTriggerQuota ?? false)
         self.onSave = onSave
     }
 
@@ -89,6 +91,21 @@ struct SettingsView: View {
 
                 Divider()
 
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Quota Optimization")
+                        .font(.headline)
+
+                    Toggle("Auto-trigger quota period", isOn: $autoTriggerQuota)
+                        .help("Automatically start a new 5-hour quota period when inactive")
+
+                    Text("When enabled, automatically sends a minimal message (~10-20 tokens) to start a new quota period when the current one expires.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+
+                Divider()
+
                 HStack(spacing: 12) {
                     Button("Auto-Detect") {
                         autoDetectCredentials()
@@ -112,7 +129,7 @@ struct SettingsView: View {
                 .padding()
             }
         }
-        .frame(width: 500, height: 300)
+        .frame(width: 500, height: 380)
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -185,12 +202,13 @@ struct SettingsView: View {
     private func saveSettings() {
         let settings = ClaudeSettings(
             organizationId: organizationId.trimmingCharacters(in: .whitespacesAndNewlines),
-            sessionKey: sessionKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            sessionKey: sessionKey.trimmingCharacters(in: .whitespacesAndNewlines),
+            autoTriggerQuota: autoTriggerQuota
         )
 
         do {
             try settings.save()
-            Logger.shared.log("Settings saved successfully", level: .info)
+            Logger.shared.log("Settings saved successfully (auto-trigger: \(autoTriggerQuota))", level: .info)
             onSave(settings)
             dismiss()
         } catch {
@@ -205,7 +223,7 @@ struct SettingsView: View {
 class SettingsWindowController: NSWindowController {
     convenience init(currentSettings: ClaudeSettings?, onSave: @escaping (ClaudeSettings) -> Void) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 380),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
