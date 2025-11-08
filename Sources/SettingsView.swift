@@ -32,22 +32,25 @@ struct SettingsView: View {
             } else {
                 Form {
                     Section {
-                        LabeledContent {
+                        HStack {
+                            Text("Organization ID")
+                                .frame(width: 120, alignment: .trailing)
+
                             TextField("6e35a193-deaa-46a0-80bd-f7a1652d383f", text: $organizationId)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(.body, design: .monospaced))
-                        } label: {
-                            HStack {
-                                Text("Organization ID")
-                                Button(action: { showHelpAlert = true }) {
-                                    Image(systemName: "questionmark.circle")
-                                }
-                                .buttonStyle(.plain)
-                                .help("How to get credentials manually")
+
+                            Button(action: { showHelpAlert = true }) {
+                                Image(systemName: "questionmark.circle")
                             }
+                            .buttonStyle(.plain)
+                            .help("How to get credentials manually")
                         }
 
-                        LabeledContent("Session Key") {
+                        HStack {
+                            Text("Session Key")
+                                .frame(width: 120, alignment: .trailing)
+
                             SecureField("sk-ant-sid01-...", text: $sessionKey)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(.body, design: .monospaced))
