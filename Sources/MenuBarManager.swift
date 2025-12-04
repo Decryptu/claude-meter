@@ -1,19 +1,20 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 class MenuBarManager: NSObject {
     private let statusItem: NSStatusItem
     private let button: NSStatusBarButton
     private var menu: NSMenu!
     private var usageData: UsageResponse?
-    private var timer: Timer?
+    private var refreshTask: Task<Void, Never>?
     private var apiClient: ClaudeAPIClient?
     private var settings: ClaudeSettings?
     private var settingsWindowController: SettingsWindowController?
     private let logger = Logger.shared
 
     // App version
-    private let appVersion = "1.2.2"
+    nonisolated private let appVersion = "1.2.3"
 
     // Auto-detection retry tracking
     private var lastAutoDetectionAttempt: Date?
@@ -24,7 +25,7 @@ class MenuBarManager: NSObject {
         self.button = button
         super.init()
 
-        logger.log("MenuBarManager initializing", level: .info)
+        Task { await logger.log("MenuBarManager initializing", level: .info) }
         setupMenu()
         loadSettings()
         updateIcon(percentage: nil)
@@ -33,18 +34,18 @@ class MenuBarManager: NSObject {
     }
 
     private func loadSettings() {
-        logger.log("Loading settings", level: .info)
+        Task { await logger.log("Loading settings", level: .info) }
         settings = ClaudeSettings.load()
 
         if let settings = settings {
-            logger.log("Settings loaded successfully", level: .info)
-            logger.log("Organization ID: \(settings.organizationId)", level: .debug)
+            Task { await logger.log("Settings loaded successfully", level: .info) }
+            Task { await logger.log("Organization ID: \(settings.organizationId)", level: .debug) }
             apiClient = ClaudeAPIClient(settings: settings)
             Task {
                 await refreshUsage()
             }
         } else {
-            logger.log("No settings found, showing auto-detection prompt", level: .info)
+            Task { await logger.log("No settings found, showing auto-detection prompt", level: .info) }
             // Show prompt before attempting auto-detection
             showAutoDetectionPrompt()
         }
@@ -72,11 +73,11 @@ class MenuBarManager: NSObject {
 
         if response == .alertFirstButtonReturn {
             // User chose auto-detection
-            logger.log("User chose auto-detection", level: .info)
+            Task { await logger.log("User chose auto-detection", level: .info) }
             tryAutoDetection()
         } else {
             // User chose manual configuration
-            logger.log("User chose manual configuration", level: .info)
+            Task { await logger.log("User chose manual configuration", level: .info) }
             updateMenu()  // Update menu to show setup options
         }
     }
@@ -85,43 +86,39 @@ class MenuBarManager: NSObject {
         // Update last attempt timestamp
         lastAutoDetectionAttempt = Date()
 
-        Task {
+        Task { @MainActor in
             let extractor = CredentialExtractor()
             if let credentials = extractor.extractCredentials() {
-                logger.log("Auto-detection successful", level: .info)
+                await logger.log("Auto-detection successful", level: .info)
 
-                await MainActor.run {
-                    if let orgId = credentials.organizationId, let sessionKey = credentials.sessionKey {
-                        let newSettings = ClaudeSettings(
-                            organizationId: orgId,
-                            sessionKey: sessionKey,
-                            autoTriggerQuota: false
-                        )
+                if let orgId = credentials.organizationId, let sessionKey = credentials.sessionKey {
+                    let newSettings = ClaudeSettings(
+                        organizationId: orgId,
+                        sessionKey: sessionKey,
+                        autoTriggerQuota: false
+                    )
 
-                        do {
-                            try newSettings.save()
-                            settings = newSettings
-                            apiClient = ClaudeAPIClient(settings: newSettings)
+                    do {
+                        try newSettings.save()
+                        settings = newSettings
+                        apiClient = ClaudeAPIClient(settings: newSettings)
 
-                            Task {
-                                await refreshUsage()
-                            }
-
-                            if isRetry {
-                                logger.log("Credentials refreshed automatically from \(credentials.source)", level: .info)
-                            } else {
-                                showNotification(title: "ClaudeMeter Ready", message: "Credentials detected from \(credentials.source)")
-                            }
-                        } catch {
-                            logger.log("Error saving auto-detected settings: \(error)", level: .error)
+                        Task {
+                            await refreshUsage()
                         }
+
+                        if isRetry {
+                            await logger.log("Credentials refreshed automatically from \(credentials.source)", level: .info)
+                        } else {
+                            showNotification(title: "ClaudeMeter Ready", message: "Credentials detected from \(credentials.source)")
+                        }
+                    } catch {
+                        await logger.log("Error saving auto-detected settings: \(error)", level: .error)
                     }
                 }
             } else {
-                logger.log("Auto-detection failed, user needs to configure manually", level: .warning)
-                await MainActor.run {
-                    updateMenu()  // Update menu to show setup options
-                }
+                await logger.log("Auto-detection failed, user needs to configure manually", level: .warning)
+                updateMenu()  // Update menu to show setup options
             }
         }
     }
@@ -136,7 +133,7 @@ class MenuBarManager: NSObject {
 
         if !canRetry {
             let remainingTime = Int(autoDetectionCooldownSeconds - timeSinceLastAttempt)
-            logger.log("Auto-detection on cooldown. Retry available in \(remainingTime)s", level: .debug)
+            Task { await logger.log("Auto-detection on cooldown. Retry available in \(remainingTime)s", level: .debug) }
         }
 
         return canRetry
@@ -158,23 +155,27 @@ class MenuBarManager: NSObject {
     }
 
     private func startPeriodicRefresh() {
-        logger.log("Starting periodic refresh (60s interval)", level: .debug)
-        // Refresh every 60 seconds
-        timer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                await self?.refreshUsage()
+        Task { await logger.log("Starting periodic refresh (60s interval)", level: .debug) }
+
+        refreshTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                await refreshUsage()
             }
         }
     }
 
-    @MainActor
+    deinit {
+        refreshTask?.cancel()
+    }
+
     private func refreshUsage() async {
         guard let apiClient = apiClient else {
-            logger.log("Cannot refresh: No API client configured", level: .debug)
+            await logger.log("Cannot refresh: No API client configured", level: .debug)
             return
         }
 
-        logger.log("Fetching usage data", level: .debug)
+        await logger.log("Fetching usage data", level: .debug)
 
         do {
             usageData = try await apiClient.fetchUsage()
@@ -182,7 +183,7 @@ class MenuBarManager: NSObject {
             // Check for null state (quota period expired) and auto-trigger if enabled
             if let settings = settings, settings.autoTriggerQuota {
                 if let fiveHour = usageData?.fiveHour, fiveHour.resetsAt == nil {
-                    logger.log("Detected null quota state with auto-trigger enabled", level: .info)
+                    await logger.log("Detected null quota state with auto-trigger enabled", level: .info)
                     await triggerQuotaPeriod()
                     // Refresh usage data after triggering
                     usageData = try await apiClient.fetchUsage()
@@ -193,11 +194,11 @@ class MenuBarManager: NSObject {
             updateMenu()
 
             if let percentage = usageData?.fiveHour?.utilization {
-                logger.log("Usage: \(percentage)%", level: .debug)
+                await logger.log("Usage: \(percentage)%", level: .debug)
                 updateIcon(percentage: percentage)
             }
         } catch {
-            logger.log("Error fetching usage: \(error)", level: .error)
+            await logger.log("Error fetching usage: \(error)", level: .error)
             updateIcon(percentage: nil)
 
             // Check if it's an authentication error and retry credential detection
@@ -205,32 +206,31 @@ class MenuBarManager: NSObject {
                case .httpError(let statusCode) = apiError,
                (statusCode == 401 || statusCode == 403) {
 
-                logger.log("Authentication error detected (HTTP \(statusCode)). Credentials may have expired.", level: .warning)
+                await logger.log("Authentication error detected (HTTP \(statusCode)). Credentials may have expired.", level: .warning)
 
                 if canRetryAutoDetection() {
-                    logger.log("Attempting to refresh credentials automatically...", level: .info)
+                    await logger.log("Attempting to refresh credentials automatically...", level: .info)
                     tryAutoDetection(isRetry: true)
                 } else {
-                    logger.log("Cannot retry yet - cooldown period active", level: .debug)
+                    await logger.log("Cannot retry yet - cooldown period active", level: .debug)
                 }
             }
         }
     }
 
-    @MainActor
     private func triggerQuotaPeriod() async {
         guard let apiClient = apiClient else {
-            logger.log("Cannot trigger quota: No API client configured", level: .error)
+            await logger.log("Cannot trigger quota: No API client configured", level: .error)
             return
         }
 
-        logger.log("Smart quota refresh: Triggering new quota period", level: .info)
+        await logger.log("Smart quota refresh: Triggering new quota period", level: .info)
 
         do {
             let resetsAt = try await apiClient.triggerQuotaPeriod()
-            logger.log("Smart quota refresh: New quota period started, resets at: \(resetsAt)", level: .info)
+            await logger.log("Smart quota refresh: New quota period started, resets at: \(resetsAt)", level: .info)
         } catch {
-            logger.log("Smart quota refresh: Error triggering quota period: \(error)", level: .error)
+            await logger.log("Smart quota refresh: Error triggering quota period: \(error)", level: .error)
         }
     }
 
@@ -385,15 +385,15 @@ class MenuBarManager: NSObject {
     }
 
     @objc private func refreshNow() {
-        logger.log("Manual refresh triggered", level: .info)
-        Task { @MainActor in
+        Task { await logger.log("Manual refresh triggered", level: .info) }
+        Task {
             await refreshUsage()
         }
     }
 
     @objc private func toggleSmartQuota() {
         guard var currentSettings = settings else {
-            logger.log("Cannot toggle smart quota: No settings configured", level: .error)
+            Task { await logger.log("Cannot toggle smart quota: No settings configured", level: .error) }
             return
         }
 
@@ -404,22 +404,22 @@ class MenuBarManager: NSObject {
         do {
             try currentSettings.save()
             settings = currentSettings
-            logger.log("Smart Quota Refresh toggled: \(currentSettings.autoTriggerQuota)", level: .info)
+            Task { await logger.log("Smart Quota Refresh toggled: \(currentSettings.autoTriggerQuota)", level: .info) }
             updateMenu()
 
             // Show brief explanation on first enable
             if currentSettings.autoTriggerQuota {
-                Task { @MainActor in
+                Task {
                     // Check if quota is currently in null state and trigger immediately
                     if let fiveHour = usageData?.fiveHour, fiveHour.resetsAt == nil {
-                        logger.log("Quota in null state, triggering immediately", level: .info)
+                        await logger.log("Quota in null state, triggering immediately", level: .info)
                         await triggerQuotaPeriod()
                         await refreshUsage()
                     }
                 }
             }
         } catch {
-            logger.log("Error saving smart quota setting: \(error)", level: .error)
+            Task { await logger.log("Error saving smart quota setting: \(error)", level: .error) }
             let alert = NSAlert()
             alert.messageText = "Error"
             alert.informativeText = "Could not save setting: \(error.localizedDescription)"
@@ -431,10 +431,10 @@ class MenuBarManager: NSObject {
     @objc private func toggleLaunchAtLogin() {
         do {
             try LaunchAtLoginHelper.toggle()
-            logger.log("Launch at login toggled: \(LaunchAtLoginHelper.isEnabled)", level: .info)
+            Task { await logger.log("Launch at login toggled: \(LaunchAtLoginHelper.isEnabled)", level: .info) }
             updateMenu()
         } catch {
-            logger.log("Error toggling launch at login: \(error)", level: .error)
+            Task { await logger.log("Error toggling launch at login: \(error)", level: .error) }
             let alert = NSAlert()
             alert.messageText = "Error"
             alert.informativeText = "Could not toggle launch at login: \(error.localizedDescription)"
@@ -444,15 +444,15 @@ class MenuBarManager: NSObject {
     }
 
     @objc private func openSettings() {
-        logger.log("Opening settings window", level: .info)
+        Task { await logger.log("Opening settings window", level: .info) }
 
         if settingsWindowController == nil {
             settingsWindowController = SettingsWindowController(currentSettings: settings) { [weak self] newSettings in
-                self?.logger.log("Settings updated", level: .info)
+                Task { await self?.logger.log("Settings updated", level: .info) }
                 self?.settings = newSettings
                 self?.apiClient = ClaudeAPIClient(settings: newSettings)
 
-                Task { @MainActor in
+                Task {
                     await self?.refreshUsage()
                 }
             }
@@ -464,13 +464,13 @@ class MenuBarManager: NSObject {
 
     @objc private func openLogs() {
         let logPath = logger.getLogFilePath()
-        logger.log("Opening logs at: \(logPath)", level: .info)
+        Task { await logger.log("Opening logs at: \(logPath)", level: .info) }
 
         NSWorkspace.shared.open(URL(fileURLWithPath: logPath))
     }
 
     @objc private func quit() {
-        logger.log("ClaudeMeter quitting", level: .info)
+        Task { await logger.log("ClaudeMeter quitting", level: .info) }
         NSApplication.shared.terminate(nil)
     }
 }
@@ -480,6 +480,6 @@ extension MenuBarManager: NSMenuDelegate {
         // Don't call refreshUsage here - it causes layout shifts
         // The menu is already up-to-date from the periodic refresh
         // Only log for debugging purposes
-        logger.log("Menu opened", level: .debug)
+        Task { await logger.log("Menu opened", level: .debug) }
     }
 }

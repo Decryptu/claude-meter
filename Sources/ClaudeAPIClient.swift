@@ -6,17 +6,17 @@ class ClaudeAPIClient {
 
     init(settings: ClaudeSettings) {
         self.settings = settings
-        logger.log("ClaudeAPIClient initialized", level: .debug)
+        Task { await logger.log("ClaudeAPIClient initialized", level: .debug) }
     }
 
     func fetchUsage() async throws -> UsageResponse {
         let urlString = "https://claude.ai/api/organizations/\(settings.organizationId)/usage"
         guard let url = URL(string: urlString) else {
-            logger.log("Invalid URL: \(urlString)", level: .error)
+            await logger.log("Invalid URL: \(urlString)", level: .error)
             throw APIError.invalidURL
         }
 
-        logger.log("Fetching usage from: \(urlString)", level: .debug)
+        await logger.log("Fetching usage from: \(urlString)", level: .debug)
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -29,20 +29,20 @@ class ClaudeAPIClient {
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            logger.log("Invalid response type", level: .error)
+            await logger.log("Invalid response type", level: .error)
             throw APIError.invalidResponse
         }
 
-        logger.log("API response status: \(httpResponse.statusCode)", level: .debug)
+        await logger.log("API response status: \(httpResponse.statusCode)", level: .debug)
 
         guard httpResponse.statusCode == 200 else {
-            logger.log("API error: HTTP \(httpResponse.statusCode)", level: .error)
+            await logger.log("API error: HTTP \(httpResponse.statusCode)", level: .error)
             throw APIError.httpError(statusCode: httpResponse.statusCode)
         }
 
         let decoder = JSONDecoder()
         let usageResponse = try decoder.decode(UsageResponse.self, from: data)
-        logger.log("Successfully decoded usage response", level: .debug)
+        await logger.log("Successfully decoded usage response", level: .debug)
 
         return usageResponse
     }
@@ -53,11 +53,11 @@ class ClaudeAPIClient {
     func createConversation() async throws -> String {
         let urlString = "https://claude.ai/api/organizations/\(settings.organizationId)/chat_conversations"
         guard let url = URL(string: urlString) else {
-            logger.log("Invalid URL: \(urlString)", level: .error)
+            await logger.log("Invalid URL: \(urlString)", level: .error)
             throw APIError.invalidURL
         }
 
-        logger.log("Creating new conversation at: \(urlString)", level: .debug)
+        await logger.log("Creating new conversation at: \(urlString)", level: .debug)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -79,20 +79,20 @@ class ClaudeAPIClient {
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            logger.log("Invalid response type", level: .error)
+            await logger.log("Invalid response type", level: .error)
             throw APIError.invalidResponse
         }
 
-        logger.log("Create conversation response status: \(httpResponse.statusCode)", level: .debug)
+        await logger.log("Create conversation response status: \(httpResponse.statusCode)", level: .debug)
 
         guard httpResponse.statusCode == 200 || httpResponse.statusCode == 201 else {
-            logger.log("API error: HTTP \(httpResponse.statusCode)", level: .error)
+            await logger.log("API error: HTTP \(httpResponse.statusCode)", level: .error)
             throw APIError.httpError(statusCode: httpResponse.statusCode)
         }
 
         let decoder = JSONDecoder()
         let conversationResponse = try decoder.decode(ConversationResponse.self, from: data)
-        logger.log("Conversation created with UUID: \(conversationResponse.uuid)", level: .info)
+        await logger.log("Conversation created with UUID: \(conversationResponse.uuid)", level: .info)
 
         return conversationResponse.uuid
     }
@@ -101,11 +101,11 @@ class ClaudeAPIClient {
     func sendMinimalMessage(conversationId: String) async throws -> Int {
         let urlString = "https://claude.ai/api/organizations/\(settings.organizationId)/chat_conversations/\(conversationId)/completion"
         guard let url = URL(string: urlString) else {
-            logger.log("Invalid URL: \(urlString)", level: .error)
+            await logger.log("Invalid URL: \(urlString)", level: .error)
             throw APIError.invalidURL
         }
 
-        logger.log("Sending minimal message (private/temporary conversation) to: \(conversationId)", level: .debug)
+        await logger.log("Sending minimal message (private/temporary conversation) to: \(conversationId)", level: .debug)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -124,41 +124,41 @@ class ClaudeAPIClient {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
-        logger.log("Sending payload with timezone: \(timezone)", level: .debug)
+        await logger.log("Sending payload with timezone: \(timezone)", level: .debug)
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            logger.log("Invalid response type", level: .error)
+            await logger.log("Invalid response type", level: .error)
             throw APIError.invalidResponse
         }
 
-        logger.log("Send message response status: \(httpResponse.statusCode)", level: .debug)
+        await logger.log("Send message response status: \(httpResponse.statusCode)", level: .debug)
 
         guard httpResponse.statusCode == 200 else {
-            logger.log("API error: HTTP \(httpResponse.statusCode)", level: .error)
+            await logger.log("API error: HTTP \(httpResponse.statusCode)", level: .error)
             // Log response body for debugging
             if let responseString = String(data: data, encoding: .utf8) {
-                logger.log("Response body: \(responseString.prefix(500))", level: .debug)
+                await logger.log("Response body: \(responseString.prefix(500))", level: .debug)
             }
             throw APIError.httpError(statusCode: httpResponse.statusCode)
         }
 
         // Parse SSE response to extract message_limit event
-        let resetsAt = try parseSSEResponse(data: data)
-        logger.log("Successfully extracted resets_at timestamp: \(resetsAt)", level: .info)
+        let resetsAt = try await parseSSEResponse(data: data)
+        await logger.log("Successfully extracted resets_at timestamp: \(resetsAt)", level: .info)
 
         return resetsAt
     }
 
     /// Parses SSE response to extract the resets_at timestamp from message_limit event
-    private func parseSSEResponse(data: Data) throws -> Int {
+    private func parseSSEResponse(data: Data) async throws -> Int {
         guard let responseString = String(data: data, encoding: .utf8) else {
-            logger.log("Failed to decode SSE response", level: .error)
+            await logger.log("Failed to decode SSE response", level: .error)
             throw APIError.parseError(message: "Could not decode response as UTF-8")
         }
 
-        logger.log("Parsing SSE response (\(responseString.count) characters)", level: .debug)
+        await logger.log("Parsing SSE response (\(responseString.count) characters)", level: .debug)
 
         // Split by lines and look for message_limit event
         let lines = responseString.components(separatedBy: .newlines)
@@ -167,7 +167,7 @@ class ClaudeAPIClient {
         for line in lines {
             if line.hasPrefix("event: message_limit") {
                 isMessageLimitEvent = true
-                logger.log("Found message_limit event", level: .debug)
+                await logger.log("Found message_limit event", level: .debug)
                 continue
             }
 
@@ -175,33 +175,33 @@ class ClaudeAPIClient {
                 let jsonString = String(line.dropFirst(6)) // Remove "data: " prefix
 
                 guard let jsonData = jsonString.data(using: .utf8) else {
-                    logger.log("Failed to convert data line to UTF-8", level: .error)
+                    await logger.log("Failed to convert data line to UTF-8", level: .error)
                     continue
                 }
 
                 // Log the JSON for debugging
-                logger.log("message_limit JSON: \(jsonString.prefix(200))", level: .debug)
+                await logger.log("message_limit JSON: \(jsonString.prefix(200))", level: .debug)
 
                 do {
                     let decoder = JSONDecoder()
                     let event = try decoder.decode(MessageLimitEvent.self, from: jsonData)
                     let resetsAt = event.messageLimit.windows.fiveHour.resetsAt
-                    logger.log("Parsed resets_at: \(resetsAt)", level: .debug)
+                    await logger.log("Parsed resets_at: \(resetsAt)", level: .debug)
                     return resetsAt
                 } catch {
-                    logger.log("Failed to decode message_limit JSON: \(error)", level: .error)
+                    await logger.log("Failed to decode message_limit JSON: \(error)", level: .error)
                     throw APIError.parseError(message: "Could not parse message_limit event: \(error.localizedDescription)")
                 }
             }
         }
 
-        logger.log("No message_limit event found in SSE response", level: .error)
+        await logger.log("No message_limit event found in SSE response", level: .error)
         throw APIError.parseError(message: "message_limit event not found in response")
     }
 
     /// Triggers a new quota period by creating a conversation and sending a minimal message
     func triggerQuotaPeriod() async throws -> Int {
-        logger.log("Starting quota period trigger sequence", level: .info)
+        await logger.log("Starting quota period trigger sequence", level: .info)
 
         // Step 1: Create conversation
         let conversationId = try await createConversation()
@@ -209,7 +209,7 @@ class ClaudeAPIClient {
         // Step 2: Send minimal message
         let resetsAt = try await sendMinimalMessage(conversationId: conversationId)
 
-        logger.log("Quota period trigger complete. New period resets at: \(resetsAt)", level: .info)
+        await logger.log("Quota period trigger complete. New period resets at: \(resetsAt)", level: .info)
 
         return resetsAt
     }

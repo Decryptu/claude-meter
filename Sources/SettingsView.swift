@@ -199,11 +199,11 @@ struct SettingsView: View {
 
         do {
             try settings.save()
-            Logger.shared.log("Settings saved successfully", level: .info)
+            Task { await Logger.shared.log("Settings saved successfully", level: .info) }
             onSave(settings)
             dismiss()
         } catch {
-            Logger.shared.log("Error saving settings: \(error)", level: .error)
+            Task { await Logger.shared.log("Error saving settings: \(error)", level: .error) }
             errorMessage = "Failed to save settings: \(error.localizedDescription)"
             showError = true
         }

@@ -1,6 +1,6 @@
 import Foundation
 
-struct UsageResponse: Codable {
+struct UsageResponse: Codable, Sendable {
     let fiveHour: UsagePeriod?
     let sevenDay: UsagePeriod?
     let sevenDayOauthApps: UsagePeriod?
@@ -16,7 +16,7 @@ struct UsageResponse: Codable {
     }
 }
 
-struct UsagePeriod: Codable {
+struct UsagePeriod: Codable, Sendable {
     let utilization: Double
     let resetsAt: String?
 
@@ -52,7 +52,7 @@ struct UsagePeriod: Codable {
     }
 }
 
-struct ClaudeSettings: Codable {
+struct ClaudeSettings: Codable, Sendable {
     var organizationId: String
     var sessionKey: String
     var autoTriggerQuota: Bool
@@ -99,12 +99,12 @@ struct ClaudeSettings: Codable {
 
 // MARK: - Quota Period Trigger Models
 
-struct ConversationResponse: Codable {
+struct ConversationResponse: Codable, Sendable {
     let uuid: String
     let name: String
 }
 
-struct MessageLimitEvent: Codable {
+struct MessageLimitEvent: Codable, Sendable {
     let type: String
     let messageLimit: MessageLimit
 
@@ -114,12 +114,12 @@ struct MessageLimitEvent: Codable {
     }
 }
 
-struct MessageLimit: Codable {
+struct MessageLimit: Codable, Sendable {
     let type: String
     let windows: Windows
 }
 
-struct Windows: Codable {
+struct Windows: Codable, Sendable {
     let fiveHour: WindowDetail
 
     enum CodingKeys: String, CodingKey {
@@ -127,7 +127,7 @@ struct Windows: Codable {
     }
 }
 
-struct WindowDetail: Codable {
+struct WindowDetail: Codable, Sendable {
     let status: String
     let resetsAt: Int
 

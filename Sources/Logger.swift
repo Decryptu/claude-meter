@@ -1,6 +1,6 @@
 import Foundation
 
-class Logger {
+actor Logger {
     static let shared = Logger()
 
     private let logFileURL: URL
@@ -18,9 +18,11 @@ class Logger {
         dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
 
-        log("ClaudeMeter started", level: .info)
-        log("Log file: \(logFileURL.path)", level: .info)
-        log("macOS Version: \(ProcessInfo.processInfo.operatingSystemVersionString)", level: .info)
+        Task {
+            await log("ClaudeMeter started", level: .info)
+            await log("Log file: \(logFileURL.path)", level: .info)
+            await log("macOS Version: \(ProcessInfo.processInfo.operatingSystemVersionString)", level: .info)
+        }
     }
 
     enum LogLevel: String {
@@ -52,7 +54,7 @@ class Logger {
         }
     }
 
-    func getLogFilePath() -> String {
+    nonisolated func getLogFilePath() -> String {
         return logFileURL.path
     }
 }
