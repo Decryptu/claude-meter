@@ -32,13 +32,13 @@ class LaunchAtLoginHelper {
     // Enable launch at login
     static func enable() throws {
         let logger = Logger.shared
-        logger.log("Enabling launch at login", level: .info)
+        Task { await logger.log("Enabling launch at login", level: .info) }
 
         if #available(macOS 13.0, *) {
             // Use SMAppService for macOS 13+
             let service = SMAppService.mainApp
             try service.register()
-            logger.log("Launch at login enabled via SMAppService", level: .info)
+            Task { await logger.log("Launch at login enabled via SMAppService", level: .info) }
         } else {
             // Fallback: create launch agent plist
             try createLaunchAgent()
@@ -48,13 +48,13 @@ class LaunchAtLoginHelper {
     // Disable launch at login
     static func disable() throws {
         let logger = Logger.shared
-        logger.log("Disabling launch at login", level: .info)
+        Task { await logger.log("Disabling launch at login", level: .info) }
 
         if #available(macOS 13.0, *) {
             // Use SMAppService for macOS 13+
             let service = SMAppService.mainApp
             try service.unregister()
-            logger.log("Launch at login disabled via SMAppService", level: .info)
+            Task { await logger.log("Launch at login disabled via SMAppService", level: .info) }
         } else {
             // Fallback: remove launch agent plist
             try removeLaunchAgent()
@@ -91,7 +91,7 @@ class LaunchAtLoginHelper {
         let plistPath = plistDirectory.appendingPathComponent("com.claudemeter.agent.plist")
         try plistContent.write(to: plistPath, atomically: true, encoding: .utf8)
 
-        Logger.shared.log("Launch agent plist created at \(plistPath.path)", level: .info)
+        Task { await Logger.shared.log("Launch agent plist created at \(plistPath.path)", level: .info) }
     }
 
     // Remove launch agent plist
@@ -101,7 +101,7 @@ class LaunchAtLoginHelper {
 
         if FileManager.default.fileExists(atPath: plistPath.path) {
             try FileManager.default.removeItem(at: plistPath)
-            Logger.shared.log("Launch agent plist removed", level: .info)
+            Task { await Logger.shared.log("Launch agent plist removed", level: .info) }
         }
     }
 }

@@ -35,33 +35,33 @@ class CredentialExtractor {
     // MARK: - Main extraction method
 
     func extractCredentials() -> ExtractedCredentials? {
-        logger.log("Starting automatic credential extraction", level: .info)
+        Task { await logger.log("Starting automatic credential extraction", level: .info) }
 
         // Priority 1: Try Claude Desktop App
         if let credentials = tryExtractFromClaudeDesktop() {
-            logger.log("Successfully extracted credentials from Claude Desktop", level: .info)
+            Task { await logger.log("Successfully extracted credentials from Claude Desktop", level: .info) }
             return credentials
         }
 
         // Priority 2: Try Brave Browser
         if let credentials = tryExtractFromBrave() {
-            logger.log("Successfully extracted credentials from Brave", level: .info)
+            Task { await logger.log("Successfully extracted credentials from Brave", level: .info) }
             return credentials
         }
 
         // Priority 3: Try Chrome
         if let credentials = tryExtractFromChrome() {
-            logger.log("Successfully extracted credentials from Chrome", level: .info)
+            Task { await logger.log("Successfully extracted credentials from Chrome", level: .info) }
             return credentials
         }
 
         // Priority 4: Try Safari
         if let credentials = tryExtractFromSafari() {
-            logger.log("Successfully extracted credentials from Safari", level: .info)
+            Task { await logger.log("Successfully extracted credentials from Safari", level: .info) }
             return credentials
         }
 
-        logger.log("Could not extract credentials from any source", level: .warning)
+        Task { await logger.log("Could not extract credentials from any source", level: .warning) }
         return nil
     }
 
@@ -131,7 +131,7 @@ class CredentialExtractor {
             var db: OpaquePointer?
 
             guard sqlite3_open(tempPath.path, &db) == SQLITE_OK else {
-                logger.log("Failed to open database for \(source)", level: .error)
+                Task { await logger.log("Failed to open database for \(source)", level: .error) }
                 sqlite3_close(db)
                 return nil
             }
@@ -154,7 +154,7 @@ class CredentialExtractor {
             }
 
         } catch {
-            logger.log("Error accessing database for \(source): \(error.localizedDescription)", level: .error)
+            Task { await logger.log("Error accessing database for \(source): \(error.localizedDescription)", level: .error) }
         }
 
         return nil
@@ -182,7 +182,7 @@ class CredentialExtractor {
         }
 
         if count > 0 {
-            logger.log("Found \(count) claude.ai cookies in \(source)", level: .debug)
+            Task { await logger.log("Found \(count) claude.ai cookies in \(source)", level: .debug) }
         }
     }
 
@@ -196,7 +196,7 @@ class CredentialExtractor {
         var statement: OpaquePointer?
 
         guard sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK else {
-            logger.log("Failed to prepare statement for \(name)", level: .error)
+            Task { await logger.log("Failed to prepare statement for \(name)", level: .error) }
             return nil
         }
 
@@ -219,10 +219,10 @@ class CredentialExtractor {
 
                     // Try to decrypt (Chrome v10+ encryption format)
                     if let decrypted = decryptChromeValue(encryptedData, source: source) {
-                        logger.log("Successfully decrypted \(name) from \(source)", level: .info)
+                        Task { await logger.log("Successfully decrypted \(name) from \(source)", level: .info) }
                         return decrypted
                     } else {
-                        logger.log("Failed to decrypt \(name) from \(source)", level: .warning)
+                        Task { await logger.log("Failed to decrypt \(name) from \(source)", level: .warning) }
                     }
                 }
             }
@@ -239,22 +239,22 @@ class CredentialExtractor {
         guard data.count > 3 else { return nil }
 
         let prefix = data.prefix(3)
-        logger.log("Decrypting v10 format cookie from \(source)", level: .debug)
+        Task { await logger.log("Decrypting v10 format cookie from \(source)", level: .debug) }
 
         if prefix != Data([0x76, 0x31, 0x30]) { // "v10"
-            logger.log("Unexpected encryption format", level: .warning)
+            Task { await logger.log("Unexpected encryption format", level: .warning) }
             return nil
         }
 
         // Get the encryption key from Keychain
         guard let keychainPassword = getEncryptionKey(for: source) else {
-            logger.log("Could not retrieve encryption key from Keychain for \(source)", level: .warning)
+            Task { await logger.log("Could not retrieve encryption key from Keychain for \(source)", level: .warning) }
             return nil
         }
 
         // Derive the actual encryption key using PBKDF2
         guard let derivedKey = deriveKeyWithPBKDF2(password: keychainPassword) else {
-            logger.log("Failed to derive encryption key", level: .error)
+            Task { await logger.log("Failed to derive encryption key", level: .error) }
             return nil
         }
 
@@ -262,7 +262,7 @@ class CredentialExtractor {
         let ciphertext = data.dropFirst(3)
 
         guard ciphertext.count > 0 else {
-            logger.log("Encrypted data too short", level: .error)
+            Task { await logger.log("Encrypted data too short", level: .error) }
             return nil
         }
 
@@ -271,7 +271,7 @@ class CredentialExtractor {
         let iv = Data(repeating: 0x20, count: 16) // 16 spaces
 
         guard let decryptedData = decryptAES128CBC(ciphertext: ciphertext, key: derivedKey, iv: iv) else {
-            logger.log("CBC decryption failed for \(source)", level: .warning)
+            Task { await logger.log("CBC decryption failed for \(source)", level: .warning) }
             return nil
         }
 
@@ -292,7 +292,7 @@ class CredentialExtractor {
         }
 
         if let decryptedString = String(data: finalData, encoding: .utf8) {
-            logger.log("Successfully decrypted cookie from \(source)", level: .info)
+            Task { await logger.log("Successfully decrypted cookie from \(source)", level: .info) }
             return decryptedString
         }
 
@@ -404,12 +404,12 @@ class CredentialExtractor {
             let status = SecItemCopyMatching(query as CFDictionary, &result)
 
             if status == errSecSuccess, let keyData = result as? Data {
-                logger.log("Retrieved encryption key from Keychain (\(serviceName))", level: .debug)
+                Task { await logger.log("Retrieved encryption key from Keychain (\(serviceName))", level: .debug) }
                 return keyData
             }
         }
 
-        logger.log("Could not retrieve encryption key from Keychain for \(source)", level: .warning)
+        Task { await logger.log("Could not retrieve encryption key from Keychain for \(source)", level: .warning) }
         return nil
     }
 }
