@@ -86,43 +86,39 @@ class MenuBarManager: NSObject {
         // Update last attempt timestamp
         lastAutoDetectionAttempt = Date()
 
-        Task {
+        Task { @MainActor in
             let extractor = CredentialExtractor()
             if let credentials = extractor.extractCredentials() {
                 await logger.log("Auto-detection successful", level: .info)
 
-                await MainActor.run {
-                    if let orgId = credentials.organizationId, let sessionKey = credentials.sessionKey {
-                        let newSettings = ClaudeSettings(
-                            organizationId: orgId,
-                            sessionKey: sessionKey,
-                            autoTriggerQuota: false
-                        )
+                if let orgId = credentials.organizationId, let sessionKey = credentials.sessionKey {
+                    let newSettings = ClaudeSettings(
+                        organizationId: orgId,
+                        sessionKey: sessionKey,
+                        autoTriggerQuota: false
+                    )
 
-                        do {
-                            try newSettings.save()
-                            settings = newSettings
-                            apiClient = ClaudeAPIClient(settings: newSettings)
+                    do {
+                        try newSettings.save()
+                        settings = newSettings
+                        apiClient = ClaudeAPIClient(settings: newSettings)
 
-                            Task {
-                                await refreshUsage()
-                            }
-
-                            if isRetry {
-                                await logger.log("Credentials refreshed automatically from \(credentials.source)", level: .info)
-                            } else {
-                                showNotification(title: "ClaudeMeter Ready", message: "Credentials detected from \(credentials.source)")
-                            }
-                        } catch {
-                            await logger.log("Error saving auto-detected settings: \(error)", level: .error)
+                        Task {
+                            await refreshUsage()
                         }
+
+                        if isRetry {
+                            await logger.log("Credentials refreshed automatically from \(credentials.source)", level: .info)
+                        } else {
+                            showNotification(title: "ClaudeMeter Ready", message: "Credentials detected from \(credentials.source)")
+                        }
+                    } catch {
+                        await logger.log("Error saving auto-detected settings: \(error)", level: .error)
                     }
                 }
             } else {
                 await logger.log("Auto-detection failed, user needs to configure manually", level: .warning)
-                await MainActor.run {
-                    updateMenu()  // Update menu to show setup options
-                }
+                updateMenu()  // Update menu to show setup options
             }
         }
     }
