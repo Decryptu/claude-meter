@@ -13,7 +13,7 @@ class MenuBarManager: NSObject {
     private let logger = Logger.shared
 
     // App version
-    private let appVersion = "1.2.1"
+    private let appVersion = "1.2.2"
 
     // Auto-detection retry tracking
     private var lastAutoDetectionAttempt: Date?
@@ -189,6 +189,7 @@ class MenuBarManager: NSObject {
                 }
             }
 
+            // Update menu and icon after data is fetched
             updateMenu()
 
             if let percentage = usageData?.fiveHour?.utilization {
@@ -346,6 +347,16 @@ class MenuBarManager: NSObject {
             let logsItem = NSMenuItem(title: "View Logs", action: #selector(openLogs), keyEquivalent: "")
             logsItem.target = self
             menu.addItem(logsItem)
+
+            menu.addItem(NSMenuItem.separator())
+
+            let versionItem = NSMenuItem(title: "Version \(appVersion)", action: nil, keyEquivalent: "")
+            versionItem.isEnabled = false
+            menu.addItem(versionItem)
+
+            let quitItem = NSMenuItem(title: "Quit ClaudeMeter", action: #selector(quit), keyEquivalent: "q")
+            quitItem.target = self
+            menu.addItem(quitItem)
         } else {
             let setupItem = NSMenuItem(title: "⚠️ Setup Required", action: nil, keyEquivalent: "")
             setupItem.isEnabled = false
@@ -360,17 +371,17 @@ class MenuBarManager: NSObject {
             let logsItem = NSMenuItem(title: "View Logs", action: #selector(openLogs), keyEquivalent: "")
             logsItem.target = self
             menu.addItem(logsItem)
+
+            menu.addItem(NSMenuItem.separator())
+
+            let versionItem = NSMenuItem(title: "Version \(appVersion)", action: nil, keyEquivalent: "")
+            versionItem.isEnabled = false
+            menu.addItem(versionItem)
+
+            let quitItem = NSMenuItem(title: "Quit ClaudeMeter", action: #selector(quit), keyEquivalent: "q")
+            quitItem.target = self
+            menu.addItem(quitItem)
         }
-
-        menu.addItem(NSMenuItem.separator())
-
-        let versionItem = NSMenuItem(title: "Version \(appVersion)", action: nil, keyEquivalent: "")
-        versionItem.isEnabled = false
-        menu.addItem(versionItem)
-
-        let quitItem = NSMenuItem(title: "Quit ClaudeMeter", action: #selector(quit), keyEquivalent: "q")
-        quitItem.target = self
-        menu.addItem(quitItem)
     }
 
     @objc private func refreshNow() {
@@ -466,8 +477,9 @@ class MenuBarManager: NSObject {
 
 extension MenuBarManager: NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
-        Task { @MainActor in
-            await refreshUsage()
-        }
+        // Don't call refreshUsage here - it causes layout shifts
+        // The menu is already up-to-date from the periodic refresh
+        // Only log for debugging purposes
+        logger.log("Menu opened", level: .debug)
     }
 }
